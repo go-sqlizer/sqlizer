@@ -108,12 +108,28 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 	}
 
 	switch association.Type {
-	case BelongsToAssociation, HasOneAssociation:
-		parentField = parent.Field(association.Properties.ForeignKey).Field
+	case BelongsToAssociation:
+		parentField = parent.FieldFromName(association.Properties.ForeignKey).Field
 		childField = association.Model.primaryKey.Field
 	case HasManyAssociation:
 		parentField = parent.primaryKey.Field
-		childField = model.Field(association.Properties.ForeignKey).Field
+		childField = model.FieldFromName(association.Properties.ForeignKey).Field
+	case ManyToManyAssociation:
+		assoc := association.Properties.Through.AssociationFromModel(*association.Model)
+		through := association.Properties.Through
+		throughField := through.FieldFromName(association.Properties.ForeignKey).Field
+		parentAliasAux := fmt.Sprintf("%s.%s", tableAlias, through.Name)
+		joins = []string{
+			sqlizer.Conn.Join(
+				joinType,
+				through.Schema, through.Table,
+				parentAliasAux, throughField,
+				parenAlias, parent.primaryKey.Field,
+			),
+		}
+		parenAlias = parentAliasAux
+		parentField = association.Properties.Through.FieldFromName(assoc.Properties.ForeignKey).Field
+		childField = association.Model.primaryKey.Field
 	}
 
 	return append(joins, sqlizer.Conn.Join(joinType, model.Schema, model.Table, tableAlias, childField, parenAlias, parentField))

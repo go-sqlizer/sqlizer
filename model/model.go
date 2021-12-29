@@ -34,7 +34,7 @@ func (m *Model) Init() {
 	}
 }
 
-func (m Model) Field(name string) Field {
+func (m Model) FieldFromName(name string) Field {
 	columnsType := reflect.ValueOf(m.Columns)
 	return columnsType.FieldByName(name).Interface().(Field)
 }
