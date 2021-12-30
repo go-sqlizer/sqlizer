@@ -9,9 +9,10 @@ import (
 	"strings"
 )
 
-func SelectQuery(result reflect.Type, model Model, options queries.Options) string {
+func SelectQuery(result reflect.Type, model Model, options queries.Options) drivers.Query {
 	var columns []string
 	var joins []string
+	var extra []string
 	tableAlias := model.Name
 
 	// Render model fields
@@ -20,7 +21,7 @@ func SelectQuery(result reflect.Type, model Model, options queries.Options) stri
 
 		if c := reflect.ValueOf(model.Columns).FieldByName(resultField); c.IsValid() {
 			field := c.Interface().(Field)
-			columns = append(columns, sqlizer.Conn.Column(tableAlias, field.Field, "", resultField))
+			columns = append(columns, sqlizer.Conn.SelectColumn(tableAlias, field.Field, "", resultField))
 		}
 	}
 
@@ -39,12 +40,26 @@ func SelectQuery(result reflect.Type, model Model, options queries.Options) stri
 		}
 	}
 
-	return fmt.Sprintf(
-		"SELECT %s \nFROM %s \n%s",
-		strings.Join(columns, ",\n\t"),
-		sqlizer.Conn.From(model.Schema, model.Table, tableAlias),
-		strings.Join(joins, "\n"),
-	)
+	// Render Where
+	if len(options.Where) > 0 {
+		var fullWhere []string
+		for _, where := range options.Where {
+			fullWhere = append(fullWhere, string(where))
+		}
+
+		extra = append(extra, fmt.Sprintf("WHERE %s", strings.Join(fullWhere, " AND ")))
+	}
+
+	return drivers.Query{
+		Statement: fmt.Sprintf(
+			"SELECT %s \nFROM %s \n%s \n%s",
+			strings.Join(columns, ",\n\t"),
+			sqlizer.Conn.From(model.Schema, model.Table, tableAlias),
+			strings.Join(joins, "\n"),
+			strings.Join(extra, "\n"),
+		),
+		Values: []interface{}{},
+	}
 }
 
 func generateAssociation(result *reflect.Type, association Association, options queries.Include, parent Model, parenAlias string) ([]string, []string) {
@@ -68,7 +83,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 
 			if c := reflect.ValueOf(model.Columns).FieldByName(resultField); c.IsValid() {
 				field := c.Interface().(Field)
-				columns = append(columns, sqlizer.Conn.Column(tableAlias, field.Field, tableAlias, resultField))
+				columns = append(columns, sqlizer.Conn.SelectColumn(tableAlias, field.Field, tableAlias, resultField))
 			}
 		}
 	}
