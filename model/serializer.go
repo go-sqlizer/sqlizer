@@ -45,15 +45,40 @@ func generateValue(resultType reflect.Type, value *reflect.Value) ([]interface{}
 		elem = reflect.New(resultType).Elem()
 	}
 
-	for i := 0; i < elem.NumField(); i++ {
-		elemField := elem.Field(i)
-		switch elemField.Kind() {
-		case reflect.Struct:
-			newArgs, _ := generateValue(elemField.Type(), &elemField)
-			scanArgs = append(scanArgs, newArgs...)
-		default:
-			scanArgs = append(scanArgs, elemField.Addr().Interface())
+	switch resultType.Kind() {
+	case reflect.Struct:
+		for i := 0; i < elem.NumField(); i++ {
+			elemField := elem.Field(i)
+
+			switch elemField.Kind() {
+			case reflect.Struct:
+				newArgs, _ := generateValue(elemField.Type(), &elemField)
+				scanArgs = append(scanArgs, newArgs...)
+			case reflect.Ptr:
+				insideElemPointer := reflect.New(elemField.Type().Elem())
+				insideElem := insideElemPointer.Elem()
+				newArgs, _ := generateValue(insideElem.Type(), &insideElem)
+				elemField.Set(insideElemPointer)
+				scanArgs = append(scanArgs, newArgs...)
+			case reflect.Array, reflect.Slice:
+				arrayType := elemField.Type().Elem()
+				elemField.Set(reflect.Append(elemField, reflect.New(arrayType).Elem()))
+				newElem := elemField.Index(0)
+				newArgs, _ := generateValue(arrayType, &newElem)
+				scanArgs = append(scanArgs, newArgs...)
+			default:
+				scanArgs = append(scanArgs, elemField.Addr().Interface())
+			}
 		}
+	case reflect.Ptr:
+		newArgs, _ := generateValue(elem.Type().Elem(), &elem)
+		return newArgs, elem
+	case reflect.Array, reflect.Slice:
+		newArgs, newValue := generateValue(elem.Type().Elem(), nil)
+		elem.Set(reflect.Append(elem, newValue))
+		return newArgs, newValue
+	default:
+		return []interface{}{value.Addr().Interface()}, reflect.Value{}
 	}
 
 	return scanArgs, elem

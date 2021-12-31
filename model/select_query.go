@@ -78,6 +78,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 	// Render model fields
 	if result != nil {
 		resultAux := *result
+
 		for i := 0; i < resultAux.NumField(); i++ {
 			resultField := resultAux.Field(i).Name
 
@@ -152,9 +153,7 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 
 func typeResolver(p reflect.Type) *reflect.Type {
 	switch p.Kind() {
-	case reflect.Ptr:
-	case reflect.Array:
-	case reflect.Slice:
+	case reflect.Ptr, reflect.Array, reflect.Slice:
 		return typeResolver(p.Elem())
 	}
 
