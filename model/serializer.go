@@ -17,7 +17,7 @@ func SerializeResults(result interface{}, query drivers.Query, row *sql.Rows) er
 	resultAux := reflect.MakeSlice(resultListType.Elem(), 0, 1)
 
 	for row.Next() {
-		scanArgs, elem := generateValue(resultType, nil)
+		scanArgs, elem := generateValue(resultType)
 
 		// End of rows
 		if err := row.Scan(scanArgs...); err != nil {
@@ -32,54 +32,64 @@ func SerializeResults(result interface{}, query drivers.Query, row *sql.Rows) er
 	return nil
 }
 
-func SerializeResult() {
-
-}
-
-func generateValue(resultType reflect.Type, value *reflect.Value) ([]interface{}, reflect.Value) {
-	var scanArgs []interface{}
-	var elem reflect.Value
-	if value != nil {
-		elem = *value
-	} else {
-		elem = reflect.New(resultType).Elem()
-	}
-
+func generateValue(resultType reflect.Type) ([]interface{}, reflect.Value) {
 	switch resultType.Kind() {
 	case reflect.Struct:
-		for i := 0; i < elem.NumField(); i++ {
-			elemField := elem.Field(i)
-
-			switch elemField.Kind() {
-			case reflect.Struct:
-				newArgs, _ := generateValue(elemField.Type(), &elemField)
-				scanArgs = append(scanArgs, newArgs...)
-			case reflect.Ptr:
-				insideElemPointer := reflect.New(elemField.Type().Elem())
-				insideElem := insideElemPointer.Elem()
-				newArgs, _ := generateValue(insideElem.Type(), &insideElem)
-				elemField.Set(insideElemPointer)
-				scanArgs = append(scanArgs, newArgs...)
-			case reflect.Array, reflect.Slice:
-				arrayType := elemField.Type().Elem()
-				elemField.Set(reflect.Append(elemField, reflect.New(arrayType).Elem()))
-				newElem := elemField.Index(0)
-				newArgs, _ := generateValue(arrayType, &newElem)
-				scanArgs = append(scanArgs, newArgs...)
-			default:
-				scanArgs = append(scanArgs, elemField.Addr().Interface())
-			}
-		}
+		elem := reflect.New(resultType).Elem()
+		return generateValueStruct(elem)
 	case reflect.Ptr:
-		newArgs, _ := generateValue(elem.Type().Elem(), &elem)
-		return newArgs, elem
 	case reflect.Array, reflect.Slice:
-		newArgs, newValue := generateValue(elem.Type().Elem(), nil)
-		elem.Set(reflect.Append(elem, newValue))
-		return newArgs, newValue
-	default:
-		return []interface{}{value.Addr().Interface()}, reflect.Value{}
+	}
+
+	panic("Invalid return type " + resultType.Name())
+}
+
+func generateValueStruct(elem reflect.Value) ([]interface{}, reflect.Value) {
+	var scanArgs []interface{}
+
+	for i := 0; i < elem.NumField(); i++ {
+		elemField := elem.Field(i)
+
+		switch elemField.Kind() {
+		case reflect.Struct:
+			newArgs, _ := generateValueStruct(elemField)
+			scanArgs = append(scanArgs, newArgs...)
+		case reflect.Ptr:
+			newArgs, newValue := generateValuePtr(elemField)
+			elemField.Set(newValue)
+			if len(newArgs) == 0 {
+				newArgs = []interface{}{elemField.Addr().Interface()}
+			}
+
+			scanArgs = append(scanArgs, newArgs...)
+		case reflect.Array, reflect.Slice:
+		default:
+			scanArgs = append(scanArgs, elemField.Addr().Interface())
+		}
 	}
 
 	return scanArgs, elem
+}
+
+func generateValuePtr(elem reflect.Value) ([]interface{}, reflect.Value) {
+	var newElem reflect.Value
+	if elem.IsZero() || elem.IsNil() {
+		newElem = reflect.New(elem.Type().Elem())
+	} else {
+		newElem = reflect.New(elem.Elem().Type()).Elem()
+	}
+
+	switch newElem.Kind() {
+	case reflect.Struct:
+		return generateValueStruct(newElem)
+	case reflect.Ptr:
+		scanArgs, _ := generateValuePtr(newElem)
+		elem.Set(newElem)
+		return scanArgs, newElem
+	case reflect.Array, reflect.Slice:
+	default:
+		return []interface{}{}, newElem
+	}
+
+	panic("")
 }
