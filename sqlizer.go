@@ -8,7 +8,7 @@ type ConnectionConfig struct {
 
 type Config struct {
 	Connection        drivers.Config
-	ModelsInit        []func()
+	ModelsInit        []func(drivers.Driver)
 	ModelsAssociation []func()
 }
 
@@ -26,7 +26,7 @@ func (c Config) Init() drivers.Driver {
 	panicOnError(err)
 
 	for _, Init := range c.ModelsInit {
-		Init()
+		Init(Conn)
 	}
 
 	for _, Association := range c.ModelsAssociation {

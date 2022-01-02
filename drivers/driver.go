@@ -3,6 +3,7 @@ package drivers
 import (
 	"database/sql"
 	"fmt"
+	"github.com/Supersonido/sqlizer/queries"
 )
 
 type JoinType string
@@ -14,15 +15,18 @@ const (
 )
 
 type Driver interface {
-	SelectColumn(tableAlias string, field string, modelAlias string, fieldAlias string) string
-	Column(tableAlias string, field string) string
-	From(schema string, table string, alias string) string
-	Join(jType JoinType, schema string, table string, childAlias string, childField string, parentAlias string, parentField string) string
 	Connect(Config) error
+	Select(query queries.SelectQuery) (*sql.Rows, error)
+	Insert(query queries.SelectQuery) (*sql.Row, error)
 	Close()
-	Operator(action string) string
-	Exec(query Query) error
-	Query(query Query) (*sql.Rows, error)
+
+	//renderColumn() string
+	//renderAlias() string
+	renderSelectColumn(queries.Column) string
+	renderForm(queries.TableSource) string
+	renderJoin(queries.Join, func() string) (string, []interface{})
+	renderWhere([]queries.Where, string, func() string) (string, []interface{})
+	renderColumnKey(queries.ColumnKey) string
 }
 
 type Config struct {
@@ -37,19 +41,56 @@ type Config struct {
 	StartPoolOnBoot bool
 }
 
-type driver struct {
+type driverOptions struct {
 	db *sql.DB
 }
 
-type Query struct {
-	Statement string
-	Values    []interface{}
+func (d driverOptions) Close() {
+	err := d.db.Close()
+	if err != nil {
+		panic(err)
+	}
 }
 
-func ValuesSequence() func() string {
+func ValueSequence() func() string {
 	num := 0
 	return func() string {
 		num += 1
 		return fmt.Sprintf("$%d", num)
 	}
+}
+
+func renderColumns(driver Driver, columns []queries.Column, prefix string) []string {
+	var strColumns []string
+
+	for _, column := range columns {
+		var columnPrefix string
+		if prefix == "" {
+			columnPrefix = column.Alias
+		} else {
+			columnPrefix = fmt.Sprintf("%s.%s", prefix, column.Alias)
+		}
+
+		if column.Type == nil {
+			strColumns = append(strColumns, renderColumns(driver, column.Nested, columnPrefix)...)
+		} else {
+			column.Alias = columnPrefix
+			strColumns = append(strColumns, driver.renderSelectColumn(column))
+		}
+	}
+
+	return strColumns
+}
+
+func renderJoins(driver Driver, joins []queries.Join, seq func() string) ([]string, []interface{}) {
+	var strJoins []string
+	var values []interface{}
+
+	for _, join := range joins {
+		j, v := driver.renderJoin(join, seq)
+		strJoins = append(strJoins, j)
+		values = append(values, v...)
+	}
+
+	return strJoins, values
 }

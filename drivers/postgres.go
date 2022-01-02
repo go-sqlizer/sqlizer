@@ -3,10 +3,12 @@ package drivers
 import (
 	"database/sql"
 	"fmt"
+	"github.com/Supersonido/sqlizer/queries"
+	"strings"
 )
 
 type Postgres struct {
-	driver
+	driverOptions
 }
 
 func (p *Postgres) Connect(config Config) error {
@@ -34,61 +36,109 @@ func (p *Postgres) Connect(config Config) error {
 	return nil
 }
 
-func (_ Postgres) SelectColumn(tableAlias string, field string, modelAlias string, fieldAlias string) string {
-	if modelAlias == "" {
-		return fmt.Sprintf(`"%s"."%s" AS "%s"`, tableAlias, field, fieldAlias)
+func (p *Postgres) Select(query queries.SelectQuery) (*sql.Rows, error) {
+	var extra []string
+	valueSequence := ValueSequence()
+	columns := renderColumns(p, query.Columns, "")
+	joins, values := renderJoins(p, query.Joins, valueSequence)
+
+	if len(query.Where) > 0 {
+		where, newValues := p.renderWhere(query.Where, "AND", valueSequence)
+		extra = append(extra, fmt.Sprintf("WHERE %s", where))
+		values = append(values, newValues...)
 	}
 
-	return fmt.Sprintf(`"%s"."%s" AS "%s.%s"`, tableAlias, field, modelAlias, fieldAlias)
-}
-
-func (_ Postgres) Column(tableAlias string, field string) string {
-	return fmt.Sprintf(`"%s"."%s"`, tableAlias, field)
-}
-
-func (_ Postgres) From(schema string, table string, alias string) string {
-	if schema == "" {
-		schema = "public"
-	}
-
-	return fmt.Sprintf(`"%s"."%s" AS "%s"`, schema, table, alias)
-}
-
-func (p Postgres) Join(jType JoinType, schema string, table string, childAlias string, childField string, parentAlias string, parentField string) string {
-
-	return fmt.Sprintf(
-		`%s %s ON "%s"."%s" = "%s"."%s"`,
-		jType,
-		p.From(schema, table, childAlias),
-		childAlias, childField,
-		parentAlias, parentField,
+	statement := fmt.Sprintf(
+		"SELECT %s \nFROM %s\n%s\n%s",
+		strings.Join(columns, ",\n\t"),
+		p.renderForm(query.From),
+		strings.Join(joins, "\n"),
+		strings.Join(extra, "\n"),
 	)
+
+	if query.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	return p.db.Query(statement, values...)
 }
 
-func (p Postgres) Operator(action string) string {
-	return ""
+func (p *Postgres) Insert(query queries.SelectQuery) (*sql.Row, error) {
+	return nil, nil
 }
 
-func (p Postgres) Close() {
-	return
-}
-
-func (p Postgres) connectionString(config Config) string {
+func (p *Postgres) connectionString(config Config) string {
 	return fmt.Sprintf(
-		`host=%s port=%d user=%s password="%s" dbname=%s sslmode=%s`,
+		`host=%s port=%d user=%s password=%s dbname=%s sslmode=%s`,
 		config.Host, config.Port, config.User, config.Password, config.Name, config.SSl)
 
 }
 
-func (p Postgres) Exec(query Query) error {
-	value, err := p.db.Exec(query.Statement, query.Values...)
-	fmt.Println(value)
-	if err != nil {
-		return err
+func (p *Postgres) renderSelectColumn(column queries.Column) string {
+	if column.Source.Alias == "" {
+		return fmt.Sprintf(`"%s" AS "%s"`, column.Source.Field, column.Alias)
 	}
-	return nil
+
+	return fmt.Sprintf(`"%s"."%s" AS "%s"`, column.Source.Alias, column.Source.Field, column.Alias)
 }
 
-func (p Postgres) Query(query Query) (*sql.Rows, error) {
-	return p.db.Query(query.Statement, query.Values...)
+func (p *Postgres) renderForm(table queries.TableSource) string {
+	schema := table.Schema
+	if schema == "" {
+		schema = "public"
+	}
+
+	return fmt.Sprintf(`"%s"."%s" AS "%s"`, schema, table.Table, table.Alias)
+}
+
+func (p *Postgres) renderJoin(join queries.Join, seq func() string) (string, []interface{}) {
+	var joinTypeStr string
+	switch join.Type {
+	case queries.InnerJoin:
+		joinTypeStr = "INNER JOIN"
+	case queries.LeftJoin:
+		joinTypeStr = "LEFT JOIN"
+	case queries.RightJoin:
+		joinTypeStr = "RIGHT JOIN"
+	}
+
+	where, values := p.renderWhere(join.Where, "AND", seq)
+	return fmt.Sprintf(`%s %s ON %s`, joinTypeStr, p.renderForm(join.To), where), values
+}
+
+func (p *Postgres) renderColumnKey(key queries.ColumnKey) string {
+	return fmt.Sprintf(`"%s"."%s"`, key.Alias, key.Field)
+}
+
+func (p *Postgres) renderWhere(wheres []queries.Where, linker string, seq func() string) (string, []interface{}) {
+	var values []interface{}
+	var filters []string
+
+	for _, where := range wheres {
+		key := p.renderColumnKey(where.Key)
+
+		value := func() string {
+			switch where.Value.(type) {
+			case queries.ColumnKey:
+				return p.renderColumnKey(where.Value.(queries.ColumnKey))
+			default:
+				values = append(values, where.Value)
+				return seq()
+			}
+		}
+
+		switch where.Operator {
+		case "=", "!=":
+			filters = append(filters, fmt.Sprintf("%s %s %s", key, where.Operator, value()))
+		case "and":
+			newFilters, NewValues := p.renderWhere(where.Nested, "AND", seq)
+			filters = append(filters, fmt.Sprintf("(%s)", newFilters))
+			values = append(values, NewValues...)
+		case "or":
+			newFilters, NewValues := p.renderWhere(where.Nested, "OR", seq)
+			filters = append(filters, fmt.Sprintf("(%s)", newFilters))
+			values = append(values, NewValues...)
+		}
+	}
+	return strings.Join(filters, fmt.Sprintf(" %s ", linker)), values
 }

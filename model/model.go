@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/Supersonido/sqlizer/drivers"
 	"reflect"
 )
 
@@ -11,6 +12,7 @@ type Model struct {
 	Columns      interface{}
 	Associations interface{}
 	primaryKey   *Field
+	driver       drivers.Driver
 }
 
 type Field struct {
@@ -23,18 +25,22 @@ type Field struct {
 	VirtualField bool
 }
 
-func (m *Model) Init() {
-	// Get primaryKey
-	columnsType := reflect.ValueOf(m.Columns)
+func (model *Model) Init(driver drivers.Driver) {
+	// Find PrimaryKey
+	columnsType := reflect.ValueOf(model.Columns)
 	for i := 0; i < columnsType.NumField(); i++ {
 		resultField := columnsType.Field(i).Interface().(Field)
 		if resultField.PrimaryKey {
-			m.primaryKey = &resultField
+			model.primaryKey = &resultField
+			break
 		}
 	}
+
+	// Save driver
+	model.driver = driver
 }
 
-func (m Model) FieldFromName(name string) Field {
-	columnsType := reflect.ValueOf(m.Columns)
+func (model Model) FieldFromName(name string) Field {
+	columnsType := reflect.ValueOf(model.Columns)
 	return columnsType.FieldByName(name).Interface().(Field)
 }
