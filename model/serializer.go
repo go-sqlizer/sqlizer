@@ -1,42 +1,79 @@
 package model
 
 import (
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
-	"github.com/Supersonido/sqlizer/drivers"
+	"github.com/Supersonido/sqlizer/queries"
 	"reflect"
 )
 
-func SerializeResults(result interface{}, query drivers.Query, row *sql.Rows) error {
+func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) error {
+	err := row.Err()
 	if row.Err() != nil {
+		fmt.Println(err)
 		return row.Err()
 	}
 
-	resultListType := reflect.TypeOf(result)
-	resultType := resultListType.Elem().Elem()
-	resultAux := reflect.MakeSlice(resultListType.Elem(), 0, 1)
+	// ResultInformation
+	resultListType := result.Type()
+	resultAux := reflect.MakeSlice(resultListType, 0, 0)
+	resultHashTable := make(map[string]interface{})
+
+	// Generate basic row result
+	resultType := resultListType.Elem()
 
 	for row.Next() {
-		scanArgs, elem := generateValue(resultType)
+		scanArgs, argsStruct := generateValues(query.Columns)
 
-		// End of rows
-		if err := row.Scan(scanArgs...); err != nil {
+		if err = row.Scan(scanArgs...); err != nil {
 			fmt.Println(err)
 			return err
 		}
 
-		resultAux = reflect.Append(resultAux, elem)
+		if err = processNewValue(&query, &resultAux, &resultType, &argsStruct, &resultHashTable); err != nil {
+			fmt.Println(err)
+			return err
+		}
 	}
 
-	reflect.ValueOf(result).Elem().Set(resultAux)
+	result.Set(resultAux)
 	return nil
 }
 
-func generateValue(resultType reflect.Type) ([]interface{}, reflect.Value) {
+func generateValues(columns []queries.Column) ([]interface{}, map[string]interface{}) {
+	var scanArgs []interface{}
+	argsStruct := make(map[string]interface{})
+
+	for _, column := range columns {
+		if column.Type != nil {
+			valueType := *column.Type
+			valueInstance := reflect.New(valueType)
+			if valueType.Kind() == reflect.Ptr {
+				argsStruct[column.Alias] = valueInstance
+				scanArgs = append(scanArgs, valueInstance.Interface())
+			} else {
+				newTest := reflect.New(valueInstance.Type())
+				newTest.Elem().Set(valueInstance)
+				argsStruct[column.Alias] = newTest.Elem()
+				scanArgs = append(scanArgs, newTest.Interface())
+			}
+		} else {
+			newScanArgs, newNestedValues := generateValues(column.Nested)
+			scanArgs = append(scanArgs, newScanArgs...)
+			argsStruct[column.Alias] = newNestedValues
+		}
+	}
+
+	return scanArgs, argsStruct
+}
+
+func renderValue(resultType reflect.Type) reflect.Value {
 	switch resultType.Kind() {
 	case reflect.Struct:
 		elem := reflect.New(resultType).Elem()
-		return generateValueStruct(elem)
+		return renderValueStruct(elem)
 	case reflect.Ptr:
 	case reflect.Array, reflect.Slice:
 	}
@@ -44,34 +81,24 @@ func generateValue(resultType reflect.Type) ([]interface{}, reflect.Value) {
 	panic("Invalid return type " + resultType.Name())
 }
 
-func generateValueStruct(elem reflect.Value) ([]interface{}, reflect.Value) {
-	var scanArgs []interface{}
-
+func renderValueStruct(elem reflect.Value) reflect.Value {
 	for i := 0; i < elem.NumField(); i++ {
 		elemField := elem.Field(i)
 
 		switch elemField.Kind() {
 		case reflect.Struct:
-			newArgs, _ := generateValueStruct(elemField)
-			scanArgs = append(scanArgs, newArgs...)
+			_ = renderValueStruct(elemField)
 		case reflect.Ptr:
-			newArgs, newValue := generateValuePtr(elemField)
+			newValue := renderValuePtr(elemField)
 			elemField.Set(newValue)
-			if len(newArgs) == 0 {
-				newArgs = []interface{}{elemField.Addr().Interface()}
-			}
-
-			scanArgs = append(scanArgs, newArgs...)
 		case reflect.Array, reflect.Slice:
-		default:
-			scanArgs = append(scanArgs, elemField.Addr().Interface())
 		}
 	}
 
-	return scanArgs, elem
+	return elem
 }
 
-func generateValuePtr(elem reflect.Value) ([]interface{}, reflect.Value) {
+func renderValuePtr(elem reflect.Value) reflect.Value {
 	var newElem reflect.Value
 	if elem.IsZero() || elem.IsNil() {
 		newElem = reflect.New(elem.Type().Elem())
@@ -81,15 +108,80 @@ func generateValuePtr(elem reflect.Value) ([]interface{}, reflect.Value) {
 
 	switch newElem.Kind() {
 	case reflect.Struct:
-		return generateValueStruct(newElem)
+		return renderValueStruct(newElem)
 	case reflect.Ptr:
-		scanArgs, _ := generateValuePtr(newElem)
+		_ = renderValuePtr(newElem)
 		elem.Set(newElem)
-		return scanArgs, newElem
+		return newElem
 	case reflect.Array, reflect.Slice:
 	default:
-		return []interface{}{}, newElem
+		return newElem
 	}
 
 	panic("")
+}
+
+func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]interface{}) error {
+	var resultInstance *reflect.Value
+	valueHash := rowHash(query, row)
+	if resultInstanceAux, ok := (*resultHashTable)[valueHash]; ok {
+		resultInstance = resultInstanceAux.(*reflect.Value)
+	} else {
+		*result = reflect.Append(*result, renderValue(*resultType))
+		newVal := result.Index(result.Len() - 1)
+		resultInstance = &newVal
+		(*resultHashTable)[valueHash] = resultInstance
+	}
+
+	setValues(resultInstance, row)
+	return nil
+}
+
+func setValues(result *reflect.Value, row *map[string]interface{}) (length uint, nilCounter uint) {
+	result = valueFinder(result)
+
+	for fieldName, item := range *row {
+		length++
+
+		switch item.(type) {
+		case reflect.Value:
+			if !item.(reflect.Value).IsNil() {
+				result.FieldByName(fieldName).Set(item.(reflect.Value).Elem())
+			} else {
+				nilCounter++
+			}
+		case map[string]interface{}:
+			nestedValue := result.FieldByName(fieldName)
+			nestedRow := item.(map[string]interface{})
+
+			if n, nc := setValues(&nestedValue, &nestedRow); n > 0 && n == nc {
+				nestedValue.Set(reflect.Zero(nestedValue.Type()))
+			}
+		}
+	}
+
+	return
+}
+
+func valueFinder(result *reflect.Value) *reflect.Value {
+	switch result.Kind() {
+	case reflect.Ptr, reflect.Slice:
+		newResult := result.Elem()
+		return &newResult
+	}
+
+	return result
+}
+
+func rowHash(query *queries.SelectQuery, row *map[string]interface{}) string {
+	strHash := ""
+	for _, column := range query.Columns {
+		if column.Type != nil && column.IsPrimaryKey {
+			value := (*row)[column.Alias].(reflect.Value)
+			hash := md5.Sum([]byte(value.Elem().String()))
+			strHash += hex.EncodeToString(hash[:]) + "#"
+		}
+	}
+
+	return strHash
 }

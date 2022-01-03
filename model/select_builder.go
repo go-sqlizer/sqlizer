@@ -18,8 +18,9 @@ func SelectBuilder(result reflect.Type, model Model, options queries.Options) qu
 		if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 			field := c.Interface().(Field)
 			columns = append(columns, queries.Column{
-				Alias: resultField.Name,
-				Type:  &resultField.Type,
+				Alias:        resultField.Name,
+				Type:         &resultField.Type,
+				IsPrimaryKey: field.PrimaryKey,
 				Source: queries.ColumnSource{
 					Alias: tableAlias,
 					Field: field.Field,
@@ -73,8 +74,9 @@ func generateAssociation(result *reflect.Type, association Association, options 
 			if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 				field := c.Interface().(Field)
 				columns = append(columns, queries.Column{
-					Alias: resultField.Name,
-					Type:  &resultField.Type,
+					Alias:        resultField.Name,
+					Type:         &resultField.Type,
+					IsPrimaryKey: field.PrimaryKey,
 					Source: queries.ColumnSource{
 						Alias: tableAlias,
 						Field: field.Field,

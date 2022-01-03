@@ -32,10 +32,11 @@ type SelectQuery struct {
 }
 
 type Column struct {
-	Alias  string
-	Nested []Column
-	Type   *reflect.Type
-	Source ColumnSource
+	Alias        string
+	Nested       []Column
+	Type         *reflect.Type
+	Source       ColumnSource
+	IsPrimaryKey bool
 }
 
 type ColumnSource struct {
