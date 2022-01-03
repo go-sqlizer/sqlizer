@@ -75,7 +75,11 @@ func renderValue(resultType reflect.Type) reflect.Value {
 		elem := reflect.New(resultType).Elem()
 		return renderValueStruct(elem)
 	case reflect.Ptr:
+		elem := reflect.New(resultType).Elem()
+		return renderValuePtr(elem)
 	case reflect.Array, reflect.Slice:
+		elem := reflect.MakeSlice(resultType, 0, 0).Elem()
+		return renderValueSlice(elem)
 	}
 
 	panic("Invalid return type " + resultType.Name())
@@ -114,11 +118,14 @@ func renderValuePtr(elem reflect.Value) reflect.Value {
 		elem.Set(newElem)
 		return newElem
 	case reflect.Array, reflect.Slice:
-	default:
-		return newElem
+		return renderValueSlice(newElem)
 	}
 
-	panic("")
+	return newElem
+}
+
+func renderValueSlice(elem reflect.Value) reflect.Value {
+	return elem
 }
 
 func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]interface{}) error {
@@ -139,6 +146,16 @@ func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultTy
 
 func setValues(result *reflect.Value, row *map[string]interface{}) (length uint, nilCounter uint) {
 	result = valueFinder(result)
+
+	if result.Kind() == reflect.Slice {
+		valueAux := reflect.New(result.Type().Elem()).Elem()
+		n, nc := setValues(&valueAux, row)
+		nilCounter, length = 0, 0
+		if n > 0 && n != nc {
+			result.Set(reflect.Append(*result, valueAux))
+		}
+		return
+	}
 
 	for fieldName, item := range *row {
 		length++
@@ -165,7 +182,7 @@ func setValues(result *reflect.Value, row *map[string]interface{}) (length uint,
 
 func valueFinder(result *reflect.Value) *reflect.Value {
 	switch result.Kind() {
-	case reflect.Ptr, reflect.Slice:
+	case reflect.Ptr:
 		newResult := result.Elem()
 		return &newResult
 	}

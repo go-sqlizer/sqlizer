@@ -161,6 +161,7 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 		assoc := association.Properties.Through.AssociationFromModel(*association.Model)
 		through := association.Properties.Through
 		parentAliasAux := fmt.Sprintf("%s.%s", tableAlias, through.Name)
+		fmt.Println(association.Properties.ForeignKey)
 		return []queries.Join{
 			{
 				Type: options.JoinType,
@@ -172,8 +173,8 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				},
 				Where: []queries.Where{
 					queries.Eq(
-						queries.ColumnKey{Alias: parenAlias, Field: through.FieldFromName(association.Properties.ForeignKey).Field},
-						queries.ColumnKey{Alias: parentAliasAux, Field: model.FieldFromName(association.Properties.ForeignKey).Field},
+						queries.ColumnKey{Alias: parenAlias, Field: parent.primaryKey.Field},
+						queries.ColumnKey{Alias: parentAliasAux, Field: through.FieldFromName(association.Properties.ForeignKey).Field},
 					),
 				},
 			},
