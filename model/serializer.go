@@ -12,6 +12,7 @@ import (
 type rowHashTable struct {
 	NestedHash *map[string]rowHashTable
 	Elem       *reflect.Value
+	Index      int
 }
 
 func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) error {
@@ -28,7 +29,6 @@ func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.
 
 	// Generate basic row result
 	resultType := resultListType.Elem()
-
 	for row.Next() {
 		scanArgs, argsStruct := generateValues(query.Columns)
 
@@ -137,7 +137,7 @@ func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultTy
 	var resultInstance *reflect.Value
 	var nestedHashTable *map[string]rowHashTable
 
-	valueHash := rowHash(query.Columns, row)
+	valueHash := rowHash("", query.Columns, row)
 	if resultInstanceAux, ok := (*resultHashTable)[valueHash]; ok {
 		resultInstance = resultInstanceAux.Elem
 		nestedHashTable = resultInstanceAux.NestedHash
@@ -154,45 +154,45 @@ func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultTy
 		(*resultHashTable)[valueHash] = rowHashTable{
 			NestedHash: nestedHashTable,
 			Elem:       &newVal,
+			Index:      result.Len() - 1,
 		}
 	}
 
-	setValues(resultInstance, row, query.Columns, nestedHashTable)
+	setValues(resultInstance, row, query.Columns, nestedHashTable, query.From.Alias)
+	result.Index((*resultHashTable)[valueHash].Index).Set(*resultInstance)
 	return nil
 }
 
-func setValues(result *reflect.Value, row *map[string]interface{}, columns []queries.Column, resultHashTable *map[string]rowHashTable) (length uint, nilCounter uint) {
+func setValues(result *reflect.Value, row *map[string]interface{}, columns []queries.Column, resultHashTable *map[string]rowHashTable, prefix string) (length uint, nilCounter uint) {
 	result = valueFinder(result)
 
 	if result.Kind() == reflect.Slice {
-		var resultInstance *reflect.Value
-		var nestedHashTable *map[string]rowHashTable
-
-		valueHash := rowHash(columns, row)
+		valueHash := rowHash(prefix, columns, row)
 		resultInstanceAux, ok := (*resultHashTable)[valueHash]
+		nilCounter, length = 0, 0
+
 		if ok {
-			resultInstance = resultInstanceAux.Elem
-			nestedHashTable = resultInstanceAux.NestedHash
+			resultInstance := resultInstanceAux.Elem
+			nestedHashTable := resultInstanceAux.NestedHash
+			setValues(resultInstance, row, columns, nestedHashTable, prefix)
+			result.Index(resultInstanceAux.Index).Set(*resultInstance)
 		} else {
-			// Create new Value
-			newVal := reflect.New(result.Type().Elem()).Elem()
-			resultInstance = &newVal
-
-			// Create nested hash table
+			newVal := renderValue(result.Type().Elem())
 			newHash := make(map[string]rowHashTable)
-			nestedHashTable = &newHash
 
-			(*resultHashTable)[valueHash] = rowHashTable{
-				NestedHash: nestedHashTable,
-				Elem:       &newVal,
+			n, nc := setValues(&newVal, row, columns, &newHash, prefix)
+			if n > 0 && n != nc {
+				result.Set(reflect.Append(*result, newVal))
+				newVal = result.Index(result.Len() - 1)
+
+				(*resultHashTable)[valueHash] = rowHashTable{
+					NestedHash: &newHash,
+					Elem:       &newVal,
+					Index:      result.Len() - 1,
+				}
 			}
 		}
 
-		n, nc := setValues(resultInstance, row, columns, nestedHashTable)
-		nilCounter, length = 0, 0
-		if !ok && n > 0 && n != nc {
-			result.Set(reflect.Append(*result, *resultInstance))
-		}
 		return
 	}
 
@@ -203,8 +203,9 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 
 		switch item.(type) {
 		case reflect.Value:
-			if !item.(reflect.Value).IsNil() {
-				result.FieldByName(fieldName).Set(item.(reflect.Value).Elem())
+			val := item.(reflect.Value)
+			if !val.IsNil() {
+				result.FieldByName(fieldName).Set(val.Elem())
 			} else {
 				nilCounter++
 			}
@@ -212,7 +213,7 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 			nestedValue := result.FieldByName(fieldName)
 			nestedRow := item.(map[string]interface{})
 
-			if n, nc := setValues(&nestedValue, &nestedRow, column.Nested, resultHashTable); n > 0 && n == nc {
+			if n, nc := setValues(&nestedValue, &nestedRow, column.Nested, resultHashTable, fieldName); n > 0 && n == nc {
 				nestedValue.Set(reflect.Zero(nestedValue.Type()))
 			}
 		}
@@ -231,13 +232,13 @@ func valueFinder(result *reflect.Value) *reflect.Value {
 	return result
 }
 
-func rowHash(columns []queries.Column, row *map[string]interface{}) string {
-	strHash := ""
+func rowHash(prefix string, columns []queries.Column, row *map[string]interface{}) string {
+	strHash := prefix
 	for _, column := range columns {
 		if column.Type != nil && column.IsPrimaryKey {
 			value := (*row)[column.Alias].(reflect.Value)
 			hash := md5.Sum([]byte(value.Elem().String()))
-			strHash += hex.EncodeToString(hash[:]) + "#"
+			strHash += "#" + hex.EncodeToString(hash[:])
 		}
 	}
 
