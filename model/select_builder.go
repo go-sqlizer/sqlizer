@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"github.com/Supersonido/sqlizer/queries"
+	"github.com/Supersonido/sqlizer/tools"
 	"reflect"
 )
 
@@ -35,7 +36,7 @@ func SelectBuilder(result reflect.Type, model Model, options queries.Options) qu
 			association := a.Interface().(Association)
 			var associationType *reflect.Type
 			if associationTypeAux, ok := result.FieldByName(include.As); ok {
-				associationType = typeResolver(associationTypeAux.Type)
+				associationType = tools.TypeResolver(associationTypeAux.Type)
 			}
 
 			newColumns, newJoins := generateAssociation(associationType, association, include, model, tableAlias)
@@ -95,7 +96,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 			if result != nil {
 				resultAux := *result
 				if associationTypeAux, ok := resultAux.FieldByName(include.As); ok {
-					associationType = typeResolver(associationTypeAux.Type)
+					associationType = tools.TypeResolver(associationTypeAux.Type)
 				}
 			}
 
@@ -199,13 +200,4 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 	}
 
 	return []queries.Join{}
-}
-
-func typeResolver(p reflect.Type) *reflect.Type {
-	switch p.Kind() {
-	case reflect.Ptr, reflect.Array, reflect.Slice:
-		return typeResolver(p.Elem())
-	}
-
-	return &p
 }

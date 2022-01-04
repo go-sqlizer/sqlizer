@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
 	"github.com/Supersonido/sqlizer/queries"
+	"github.com/Supersonido/sqlizer/tools"
 	"reflect"
 )
 
@@ -15,11 +15,12 @@ type rowHashTable struct {
 	Index      int
 }
 
-func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) error {
-	err := row.Err()
-	if row.Err() != nil {
-		fmt.Println(err)
-		return row.Err()
+func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) (err error) {
+	defer tools.CaptureError(&err, "Invalid Destination Model")
+
+	err = row.Err()
+	if err != nil {
+		return err
 	}
 
 	// ResultInformation
@@ -33,14 +34,10 @@ func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.
 		scanArgs, argsStruct := generateValues(query.Columns)
 
 		if err = row.Scan(scanArgs...); err != nil {
-			fmt.Println(err)
 			return err
 		}
 
-		if err = processNewValue(&query, &resultAux, &resultType, &argsStruct, &resultHashTable); err != nil {
-			fmt.Println(err)
-			return err
-		}
+		processNewValue(&query, &resultAux, &resultType, &argsStruct, &resultHashTable)
 	}
 
 	result.Set(resultAux)
@@ -133,7 +130,7 @@ func renderValueSlice(elem reflect.Value) reflect.Value {
 	return elem
 }
 
-func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]rowHashTable) error {
+func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]rowHashTable) {
 	var resultInstance *reflect.Value
 	var nestedHashTable *map[string]rowHashTable
 
@@ -160,11 +157,10 @@ func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultTy
 
 	setValues(resultInstance, row, query.Columns, nestedHashTable, query.From.Alias)
 	result.Index((*resultHashTable)[valueHash].Index).Set(*resultInstance)
-	return nil
 }
 
 func setValues(result *reflect.Value, row *map[string]interface{}, columns []queries.Column, resultHashTable *map[string]rowHashTable, prefix string) (length uint, nilCounter uint) {
-	result = valueFinder(result)
+	result = tools.ValueFinder(result)
 
 	if result.Kind() == reflect.Slice {
 		valueHash := rowHash(prefix, columns, row)
@@ -220,16 +216,6 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 	}
 
 	return
-}
-
-func valueFinder(result *reflect.Value) *reflect.Value {
-	switch result.Kind() {
-	case reflect.Ptr:
-		newResult := result.Elem()
-		return &newResult
-	}
-
-	return result
 }
 
 func rowHash(prefix string, columns []queries.Column, row *map[string]interface{}) string {
