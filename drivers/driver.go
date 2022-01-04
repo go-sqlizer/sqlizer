@@ -8,12 +8,6 @@ import (
 
 type JoinType string
 
-const (
-	InnerJoin JoinType = "INNER JOIN"
-	LeftJoin           = "LEFT JOIN"
-	RightJoin          = "RIGHT JOIN"
-)
-
 type Driver interface {
 	Connect(Config) error
 	Select(query queries.SelectQuery) (*sql.Rows, error)

@@ -54,6 +54,14 @@ func (p *Postgres) Select(query queries.SelectQuery) (*sql.Rows, error) {
 		extra = append(extra, fmt.Sprintf("ORDER BY %s", order))
 	}
 
+	if query.Limit != nil {
+		extra = append(extra, fmt.Sprintf("LIMIT %d", *query.Limit))
+	}
+
+	if query.Offset != nil {
+		extra = append(extra, fmt.Sprintf("OFFSET %d", *query.Offset))
+	}
+
 	statement := fmt.Sprintf(
 		"SELECT %s \nFROM %s\n%s\n%s",
 		strings.Join(columns, ",\n\t"),
