@@ -161,7 +161,6 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 		assoc := association.Properties.Through.AssociationFromModel(*association.Model)
 		through := association.Properties.Through
 		parentAliasAux := fmt.Sprintf("%s.%s", tableAlias, through.Name)
-		fmt.Println(association.Properties.ForeignKey)
 		return []queries.Join{
 			{
 				Type: options.JoinType,

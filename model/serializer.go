@@ -9,6 +9,11 @@ import (
 	"reflect"
 )
 
+type rowHashTable struct {
+	NestedHash *map[string]rowHashTable
+	Elem       *reflect.Value
+}
+
 func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) error {
 	err := row.Err()
 	if row.Err() != nil {
@@ -19,7 +24,7 @@ func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.
 	// ResultInformation
 	resultListType := result.Type()
 	resultAux := reflect.MakeSlice(resultListType, 0, 0)
-	resultHashTable := make(map[string]interface{})
+	resultHashTable := make(map[string]rowHashTable)
 
 	// Generate basic row result
 	resultType := resultListType.Elem()
@@ -128,36 +133,72 @@ func renderValueSlice(elem reflect.Value) reflect.Value {
 	return elem
 }
 
-func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]interface{}) error {
+func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]rowHashTable) error {
 	var resultInstance *reflect.Value
-	valueHash := rowHash(query, row)
+	var nestedHashTable *map[string]rowHashTable
+
+	valueHash := rowHash(query.Columns, row)
 	if resultInstanceAux, ok := (*resultHashTable)[valueHash]; ok {
-		resultInstance = resultInstanceAux.(*reflect.Value)
+		resultInstance = resultInstanceAux.Elem
+		nestedHashTable = resultInstanceAux.NestedHash
 	} else {
+		// Create new Value
 		*result = reflect.Append(*result, renderValue(*resultType))
 		newVal := result.Index(result.Len() - 1)
 		resultInstance = &newVal
-		(*resultHashTable)[valueHash] = resultInstance
+
+		// Create nested hash table
+		newHash := make(map[string]rowHashTable)
+		nestedHashTable = &newHash
+
+		(*resultHashTable)[valueHash] = rowHashTable{
+			NestedHash: nestedHashTable,
+			Elem:       &newVal,
+		}
 	}
 
-	setValues(resultInstance, row)
+	setValues(resultInstance, row, query.Columns, nestedHashTable)
 	return nil
 }
 
-func setValues(result *reflect.Value, row *map[string]interface{}) (length uint, nilCounter uint) {
+func setValues(result *reflect.Value, row *map[string]interface{}, columns []queries.Column, resultHashTable *map[string]rowHashTable) (length uint, nilCounter uint) {
 	result = valueFinder(result)
 
 	if result.Kind() == reflect.Slice {
-		valueAux := reflect.New(result.Type().Elem()).Elem()
-		n, nc := setValues(&valueAux, row)
+		var resultInstance *reflect.Value
+		var nestedHashTable *map[string]rowHashTable
+
+		valueHash := rowHash(columns, row)
+		resultInstanceAux, ok := (*resultHashTable)[valueHash]
+		if ok {
+			resultInstance = resultInstanceAux.Elem
+			nestedHashTable = resultInstanceAux.NestedHash
+		} else {
+			// Create new Value
+			newVal := reflect.New(result.Type().Elem()).Elem()
+			resultInstance = &newVal
+
+			// Create nested hash table
+			newHash := make(map[string]rowHashTable)
+			nestedHashTable = &newHash
+
+			(*resultHashTable)[valueHash] = rowHashTable{
+				NestedHash: nestedHashTable,
+				Elem:       &newVal,
+			}
+		}
+
+		n, nc := setValues(resultInstance, row, columns, nestedHashTable)
 		nilCounter, length = 0, 0
-		if n > 0 && n != nc {
-			result.Set(reflect.Append(*result, valueAux))
+		if !ok && n > 0 && n != nc {
+			result.Set(reflect.Append(*result, *resultInstance))
 		}
 		return
 	}
 
-	for fieldName, item := range *row {
+	for _, column := range columns {
+		fieldName := column.Alias
+		item := (*row)[fieldName]
 		length++
 
 		switch item.(type) {
@@ -171,7 +212,7 @@ func setValues(result *reflect.Value, row *map[string]interface{}) (length uint,
 			nestedValue := result.FieldByName(fieldName)
 			nestedRow := item.(map[string]interface{})
 
-			if n, nc := setValues(&nestedValue, &nestedRow); n > 0 && n == nc {
+			if n, nc := setValues(&nestedValue, &nestedRow, column.Nested, resultHashTable); n > 0 && n == nc {
 				nestedValue.Set(reflect.Zero(nestedValue.Type()))
 			}
 		}
@@ -190,9 +231,9 @@ func valueFinder(result *reflect.Value) *reflect.Value {
 	return result
 }
 
-func rowHash(query *queries.SelectQuery, row *map[string]interface{}) string {
+func rowHash(columns []queries.Column, row *map[string]interface{}) string {
 	strHash := ""
-	for _, column := range query.Columns {
+	for _, column := range columns {
 		if column.Type != nil && column.IsPrimaryKey {
 			value := (*row)[column.Alias].(reflect.Value)
 			hash := md5.Sum([]byte(value.Elem().String()))

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Supersonido/sqlizer/queries"
 	"strings"
+	"time"
 )
 
 type Postgres struct {
@@ -60,7 +61,10 @@ func (p *Postgres) Select(query queries.SelectQuery) (*sql.Rows, error) {
 		fmt.Println(statement, values)
 	}
 
-	return p.db.Query(statement, values...)
+	start := time.Now()
+	rows, r := p.db.Query(statement, values...)
+	fmt.Printf("\n\nQuery exec took %s\n", time.Since(start))
+	return rows, r
 }
 
 func (p *Postgres) Insert(query queries.SelectQuery) (*sql.Row, error) {
