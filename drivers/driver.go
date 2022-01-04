@@ -20,13 +20,12 @@ type Driver interface {
 	Insert(query queries.SelectQuery) (*sql.Row, error)
 	Close()
 
-	//renderColumn() string
-	//renderAlias() string
 	renderSelectColumn(queries.Column) string
 	renderForm(queries.TableSource) string
 	renderJoin(queries.Join, func() string) (string, []interface{})
 	renderWhere([]queries.Where, string, func() string) (string, []interface{})
 	renderColumnKey(queries.ColumnKey) string
+	renderOrder([]queries.Order) string
 }
 
 type Config struct {

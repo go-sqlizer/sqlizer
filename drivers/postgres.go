@@ -49,6 +49,11 @@ func (p *Postgres) Select(query queries.SelectQuery) (*sql.Rows, error) {
 		values = append(values, newValues...)
 	}
 
+	if len(query.Order) > 0 {
+		order := p.renderOrder(query.Order)
+		extra = append(extra, fmt.Sprintf("ORDER BY %s", order))
+	}
+
 	statement := fmt.Sprintf(
 		"SELECT %s \nFROM %s\n%s\n%s",
 		strings.Join(columns, ",\n\t"),
@@ -121,19 +126,31 @@ func (p *Postgres) renderWhere(wheres []queries.Where, linker string, seq func()
 	for _, where := range wheres {
 		key := p.renderColumnKey(where.Key)
 
-		value := func() string {
-			switch where.Value.(type) {
-			case queries.ColumnKey:
-				return p.renderColumnKey(where.Value.(queries.ColumnKey))
-			default:
-				values = append(values, where.Value)
-				return seq()
-			}
-		}
-
 		switch where.Operator {
 		case "=", "!=":
-			filters = append(filters, fmt.Sprintf("%s %s %s", key, where.Operator, value()))
+			var value string
+			switch where.Value.(type) {
+			case queries.ColumnKey:
+				value = p.renderColumnKey(where.Value.(queries.ColumnKey))
+			default:
+				values = append(values, where.Value)
+				value = seq()
+			}
+
+			filters = append(filters, fmt.Sprintf("%s %s %s", key, where.Operator, value))
+		case "in":
+			var inValues []string
+			for _, v := range where.Value.([]interface{}) {
+				switch v.(type) {
+				case queries.ColumnKey:
+					inValues = append(inValues, p.renderColumnKey(where.Value.(queries.ColumnKey)))
+				default:
+					values = append(values, v)
+					inValues = append(inValues, seq())
+				}
+			}
+
+			filters = append(filters, fmt.Sprintf("%s IN (%s)", key, strings.Join(inValues, ", ")))
 		case "and":
 			newFilters, NewValues := p.renderWhere(where.Nested, "AND", seq)
 			filters = append(filters, fmt.Sprintf("(%s)", newFilters))
@@ -145,9 +162,26 @@ func (p *Postgres) renderWhere(wheres []queries.Where, linker string, seq func()
 		}
 	}
 
-	if len(filters) == 0{
+	if len(filters) == 0 {
 		filters = append(filters, "TRUE")
 	}
 
 	return strings.Join(filters, fmt.Sprintf(" %s ", linker)), values
+}
+
+func (p *Postgres) renderOrder(orders []queries.Order) string {
+	var ordersStr []string
+	for _, order := range orders {
+		var orderStr string
+		switch order.Type {
+		case queries.AscOrder:
+			orderStr = "ASC"
+		case queries.DescOrder:
+			orderStr = "DESC"
+		}
+
+		ordersStr = append(ordersStr, fmt.Sprintf("%s %s", p.renderColumnKey(order.Key), orderStr))
+	}
+
+	return strings.Join(ordersStr, ", ")
 }

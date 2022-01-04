@@ -8,6 +8,7 @@ type Options struct {
 	Limit   *int
 	Offset  *int
 	Include []Include
+	Order   []Order
 }
 
 type Include struct {
@@ -75,4 +76,16 @@ type Where struct {
 	Value    interface{}
 	Nested   []Where
 	Operator string
+}
+
+type OrderType uint8
+
+const (
+	DescOrder OrderType = iota
+	AscOrder
+)
+
+type Order struct {
+	Key  ColumnKey
+	Type OrderType
 }
