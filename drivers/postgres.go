@@ -144,5 +144,10 @@ func (p *Postgres) renderWhere(wheres []queries.Where, linker string, seq func()
 			values = append(values, NewValues...)
 		}
 	}
+
+	if len(filters) == 0{
+		filters = append(filters, "TRUE")
+	}
+
 	return strings.Join(filters, fmt.Sprintf(" %s ", linker)), values
 }
