@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
+	"github.com/Supersonido/sqlizer/common"
 	"github.com/Supersonido/sqlizer/queries"
-	"github.com/Supersonido/sqlizer/tools"
 	"reflect"
 )
 
@@ -16,7 +16,7 @@ type rowHashTable struct {
 }
 
 func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) (err error) {
-	defer tools.CaptureError(&err, "Invalid Destination Model")
+	defer common.CaptureError(&err, "Invalid Destination Model")
 
 	err = row.Err()
 	if err != nil {
@@ -62,7 +62,7 @@ func generateValues(columns []queries.Column) ([]interface{}, map[string]interfa
 				scanArgs = append(scanArgs, newTest.Interface())
 			}
 		} else {
-			newScanArgs, newNestedValues := generateValues(column.Nested)
+			newScanArgs, newNestedValues := generateValues(*column.Nested)
 			scanArgs = append(scanArgs, newScanArgs...)
 			argsStruct[column.Alias] = newNestedValues
 		}
@@ -160,7 +160,7 @@ func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultTy
 }
 
 func setValues(result *reflect.Value, row *map[string]interface{}, columns []queries.Column, resultHashTable *map[string]rowHashTable, prefix string) (length uint, nilCounter uint) {
-	result = tools.ValueFinder(result)
+	result = common.ValueFinder(result)
 
 	if result.Kind() == reflect.Slice {
 		valueHash := rowHash(prefix, columns, row)
@@ -209,7 +209,7 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 			nestedValue := result.FieldByName(fieldName)
 			nestedRow := item.(map[string]interface{})
 
-			if n, nc := setValues(&nestedValue, &nestedRow, column.Nested, resultHashTable, fieldName); n > 0 && n == nc {
+			if n, nc := setValues(&nestedValue, &nestedRow, *column.Nested, resultHashTable, fieldName); n > 0 && n == nc {
 				nestedValue.Set(reflect.Zero(nestedValue.Type()))
 			}
 		}

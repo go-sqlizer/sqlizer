@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func (model Model) FindAll(result interface{}, options queries.Options) error {
+func (model Model) FindAll(result interface{}, options queries.QueryOptions) error {
 	resultPointerListValue := reflect.ValueOf(result)
 	if resultPointerListValue.Kind() != reflect.Ptr {
 		return errors.New("result must start as a pointer")
@@ -31,6 +31,6 @@ func (model Model) FindAll(result interface{}, options queries.Options) error {
 	return SerializeResults(resultListValue, query, rows)
 }
 
-func (model Model) Paginate(result interface{}, options queries.Options) error {
+func (model Model) Paginate(result interface{}, options queries.QueryOptions) error {
 	return nil
 }

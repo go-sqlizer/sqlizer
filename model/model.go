@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/Supersonido/sqlizer/drivers"
+	"github.com/Supersonido/sqlizer/types"
 	"reflect"
 )
 
@@ -11,12 +12,13 @@ type Model struct {
 	Table        string
 	Columns      interface{}
 	Associations interface{}
-	primaryKey   *Field
-	driver       drivers.Driver
+	primaryKey *Field
+	driver     drivers.Driver
 }
 
 type Field struct {
 	Field        string
+	Type         types.FieldType
 	Get          *func(model interface{}) interface{}
 	Set          *func(model interface{}, value interface{}) interface{}
 	AllowNull    bool

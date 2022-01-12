@@ -2,12 +2,12 @@ package model
 
 import (
 	"fmt"
+	"github.com/Supersonido/sqlizer/common"
 	"github.com/Supersonido/sqlizer/queries"
-	"github.com/Supersonido/sqlizer/tools"
 	"reflect"
 )
 
-func SelectBuilder(result reflect.Type, model Model, options queries.Options) queries.SelectQuery {
+func SelectBuilder(result reflect.Type, model Model, options queries.QueryOptions) queries.SelectQuery {
 	var columns []queries.Column
 	var joins []queries.Join
 	tableAlias := model.Name
@@ -16,16 +16,46 @@ func SelectBuilder(result reflect.Type, model Model, options queries.Options) qu
 	for i := 0; i < result.NumField(); i++ {
 		resultField := result.Field(i)
 
+		// Exclude Fields
+		if common.ContainsStr(options.Fields.Excludes, resultField.Name) {
+			continue
+		}
+
 		if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 			field := c.Interface().(Field)
 			columns = append(columns, queries.Column{
 				Alias:        resultField.Name,
 				Type:         &resultField.Type,
 				IsPrimaryKey: field.PrimaryKey,
-				Source: queries.ColumnSource{
+				Source: &queries.ColumnSource{
 					Alias: tableAlias,
 					Field: field.Field,
 				},
+			})
+		}
+	}
+
+	// Render Extra fields
+	for _, field := range options.Fields.Includes {
+		if field.Fn == nil {
+			if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
+				fColumn := c.Interface().(Field)
+				fColumnType := reflect.Type(fColumn.Type)
+				columns = append(columns, queries.Column{
+					Alias:        field.As,
+					Type:         &fColumnType,
+					IsPrimaryKey: fColumn.PrimaryKey,
+					Source: &queries.ColumnSource{
+						Alias: tableAlias,
+						Field: fColumn.Field,
+					},
+				})
+			}
+		} else {
+			columns = append(columns, queries.Column{
+				Alias:    field.As,
+				Function: field.Fn,
+				Type:     field.Fn.Type,
 			})
 		}
 	}
@@ -36,22 +66,22 @@ func SelectBuilder(result reflect.Type, model Model, options queries.Options) qu
 			association := a.Interface().(Association)
 			var associationType *reflect.Type
 			if associationTypeAux, ok := result.FieldByName(include.As); ok {
-				associationType = tools.TypeResolver(associationTypeAux.Type)
+				associationType = common.TypeResolver(associationTypeAux.Type)
 			}
 
 			newColumns, newJoins := generateAssociation(associationType, association, include, model, tableAlias)
 			joins = append(joins, newJoins...)
 			columns = append(columns, queries.Column{
 				Alias:  include.As,
-				Nested: newColumns,
+				Nested: &newColumns,
 			})
 		}
 	}
 
 	return queries.SelectQuery{
-		Options: options,
-		Columns: columns,
-		Joins:   joins,
+		QueryOptions: options,
+		Columns:      columns,
+		Joins:        joins,
 		From: queries.TableSource{
 			Schema: model.Schema,
 			Table:  model.Table,
@@ -72,13 +102,18 @@ func generateAssociation(result *reflect.Type, association Association, options 
 		for i := 0; i < resultAux.NumField(); i++ {
 			resultField := resultAux.Field(i)
 
+			// Exclude Fields
+			if common.ContainsStr(options.Fields.Excludes, resultField.Name) {
+				continue
+			}
+
 			if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 				field := c.Interface().(Field)
 				columns = append(columns, queries.Column{
 					Alias:        resultField.Name,
 					Type:         &resultField.Type,
 					IsPrimaryKey: field.PrimaryKey,
-					Source: queries.ColumnSource{
+					Source: &queries.ColumnSource{
 						Alias: tableAlias,
 						Field: field.Field,
 					},
@@ -96,7 +131,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 			if result != nil {
 				resultAux := *result
 				if associationTypeAux, ok := resultAux.FieldByName(include.As); ok {
-					associationType = tools.TypeResolver(associationTypeAux.Type)
+					associationType = common.TypeResolver(associationTypeAux.Type)
 				}
 			}
 
@@ -104,7 +139,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 			joins = append(joins, newJoins...)
 			columns = append(columns, queries.Column{
 				Alias:  include.As,
-				Nested: newColumns,
+				Nested: &newColumns,
 			})
 		}
 	}

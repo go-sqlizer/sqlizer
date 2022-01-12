@@ -1,14 +1,18 @@
 package queries
 
-import "reflect"
+import (
+	"reflect"
+)
 
-type Options struct {
+type QueryOptions struct {
 	Logging func(...interface{})
 	Where   []Where
 	Limit   *int
 	Offset  *int
 	Include []Include
 	Order   []Order
+	Fields  Fields
+	Group   []ColumnKey
 }
 
 type Include struct {
@@ -16,10 +20,21 @@ type Include struct {
 	Include  []Include
 	Where    []Where
 	JoinType JoinType
+	Fields   Fields
+}
+
+type Fields struct {
+	Includes []Field
+	Excludes []string
+}
+
+type Field struct {
+	As string
+	Fn *Function
 }
 
 type PaginateOptions struct {
-	Options
+	QueryOptions
 	Page    int
 	PerPage int
 }
@@ -29,14 +44,15 @@ type SelectQuery struct {
 	From    TableSource
 	Joins   []Join
 	Values  []interface{}
-	Options
+	QueryOptions
 }
 
 type Column struct {
 	Alias        string
-	Nested       []Column
+	Nested       *[]Column
 	Type         *reflect.Type
-	Source       ColumnSource
+	Source       *ColumnSource
+	Function     *Function
 	IsPrimaryKey bool
 }
 
@@ -48,6 +64,10 @@ type ColumnSource struct {
 type ColumnKey struct {
 	Alias string
 	Field string
+}
+
+func (ck ColumnKey) ToSQL(serializer SQLSerializer) string {
+	return serializer.SerializeColumnKey(ck)
 }
 
 type JoinType uint8
@@ -72,10 +92,15 @@ type TableSource struct {
 }
 
 type Where struct {
-	Key      ColumnKey
+	Key      SQLRender
 	Value    interface{}
-	Nested   []Where
 	Operator string
+}
+
+type Function struct {
+	Operator string
+	Values   []interface{}
+	Type     *reflect.Type
 }
 
 type OrderType uint8
@@ -86,6 +111,6 @@ const (
 )
 
 type Order struct {
-	Key  ColumnKey
+	Key  SQLRender
 	Type OrderType
 }

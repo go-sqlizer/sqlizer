@@ -1,7 +1,9 @@
 package sqlizer
 
 import "C"
-import "github.com/Supersonido/sqlizer/drivers"
+import (
+	"github.com/Supersonido/sqlizer/drivers"
+)
 
 type ConnectionConfig struct {
 }

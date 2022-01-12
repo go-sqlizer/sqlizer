@@ -1,38 +1,57 @@
 package queries
 
-
 func Or(where ...Where) Where {
-	return Where{Nested: where, Operator: "or"}
+	return Where{Value: where, Operator: "or"}
 }
 
 func And(where ...Where) Where {
-	return Where{Nested: where, Operator: "and"}
+	return Where{Value: where, Operator: "and"}
 }
 
 func Not(where ...Where) Where {
-	return Where{Nested: where, Operator: "!"}
+	return Where{Value: where, Operator: "not"}
 }
 
-func Eq(key ColumnKey, value interface{}) Where {
+func Key(key SQLRender) Where {
+	return Where{Key: key, Operator: "col"}
+}
+
+func Eq(key SQLRender, value interface{}) Where {
 	return Where{Key: key, Value: value, Operator: "="}
 }
 
-func NotEq(key ColumnKey, value interface{}) Where {
+func Gt(key SQLRender, value interface{}) Where {
+	return Where{Key: key, Value: value, Operator: ">"}
+}
+
+func Gte(key SQLRender, value interface{}) Where {
+	return Where{Key: key, Value: value, Operator: ">="}
+}
+
+func NotEq(key SQLRender, value interface{}) Where {
 	return Where{Key: key, Value: value, Operator: "!="}
 }
 
-func IsNull(key ColumnKey) Where {
+func IsNull(key SQLRender) Where {
 	return Where{Key: key, Operator: "null"}
 }
 
-func IsNotNull(key ColumnKey) Where {
+func IsNotNull(key SQLRender) Where {
 	return Where{Key: key, Operator: "!null"}
 }
 
-func In(key ColumnKey, value []interface{}) Where {
+func In(key SQLRender, value []interface{}) Where {
 	return Where{Key: key, Value: value, Operator: "in"}
 }
 
-func NotIn(key ColumnKey, value []interface{}) Where {
+func NotIn(key SQLRender, value []interface{}) Where {
 	return Where{Key: key, Value: value, Operator: "!in"}
+}
+
+func IsTrue(key SQLRender) Where {
+	return Where{Key: key, Operator: "true"}
+}
+
+func IsFalse(key SQLRender) Where {
+	return Where{Key: key, Operator: "false"}
 }
