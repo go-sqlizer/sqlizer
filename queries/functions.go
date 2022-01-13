@@ -11,13 +11,14 @@ func Count(arg interface{}) *Function {
 }
 
 func CountDistinct(arg interface{}) *Function {
-	return &Function{Operator: "countDist", Values: []interface{}{arg}}
+	t := reflect.Type(types.UnsignedIntegerType)
+	return &Function{Operator: "countDist", Values: []interface{}{arg}, Type: &t}
 }
 
-func Max(arg interface{}) *Function {
-	return &Function{Operator: "max", Values: []interface{}{arg}}
+func Max(t reflect.Type, arg ...interface{}) *Function {
+	return &Function{Operator: "max", Values: arg, Type: &t}
 }
 
-func Min(arg interface{}) *Function {
-	return &Function{Operator: "min", Values: []interface{}{arg}}
+func Min(t reflect.Type, arg ...interface{}) *Function {
+	return &Function{Operator: "min", Values: []interface{}{arg}, Type: &t}
 }

@@ -17,7 +17,7 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 		resultField := result.Field(i)
 
 		// Exclude Fields
-		if common.ContainsStr(options.Fields.Excludes, resultField.Name) {
+		if common.ContainsStr(options.Fields.Excludes, resultField.Name) || common.ContainsInclude(options.Fields.Includes, resultField.Name) {
 			continue
 		}
 
@@ -65,16 +65,20 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 		if a := reflect.ValueOf(model.Associations).FieldByName(include.As); a.IsValid() {
 			association := a.Interface().(Association)
 			var associationType *reflect.Type
-			if associationTypeAux, ok := result.FieldByName(include.As); ok {
+			associationTypeAux, ok := result.FieldByName(include.As)
+
+			if ok && !common.ContainsStr(options.Fields.Excludes, include.As) && !common.ContainsInclude(options.Fields.Includes, include.As) {
 				associationType = common.TypeResolver(associationTypeAux.Type)
 			}
 
 			newColumns, newJoins := generateAssociation(associationType, association, include, model, tableAlias)
 			joins = append(joins, newJoins...)
-			columns = append(columns, queries.Column{
-				Alias:  include.As,
-				Nested: &newColumns,
-			})
+			if associationType != nil {
+				columns = append(columns, queries.Column{
+					Alias:  include.As,
+					Nested: &newColumns,
+				})
+			}
 		}
 	}
 
@@ -95,15 +99,15 @@ func generateAssociation(result *reflect.Type, association Association, options 
 	model := association.Model
 	tableAlias := fmt.Sprintf("%s.%s", parenAlias, options.As)
 
-	// Render model fields
 	if result != nil {
 		resultAux := *result
 
+		// Render model fields
 		for i := 0; i < resultAux.NumField(); i++ {
 			resultField := resultAux.Field(i)
 
 			// Exclude Fields
-			if common.ContainsStr(options.Fields.Excludes, resultField.Name) {
+			if common.ContainsStr(options.Fields.Excludes, resultField.Name) || common.ContainsInclude(options.Fields.Includes, resultField.Name) {
 				continue
 			}
 
@@ -120,6 +124,31 @@ func generateAssociation(result *reflect.Type, association Association, options 
 				})
 			}
 		}
+
+		// Render Extra fields
+		for _, field := range options.Fields.Includes {
+			if field.Fn == nil {
+				if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
+					fColumn := c.Interface().(Field)
+					fColumnType := reflect.Type(fColumn.Type)
+					columns = append(columns, queries.Column{
+						Alias:        field.As,
+						Type:         &fColumnType,
+						IsPrimaryKey: fColumn.PrimaryKey,
+						Source: &queries.ColumnSource{
+							Alias: tableAlias,
+							Field: fColumn.Field,
+						},
+					})
+				}
+			} else {
+				columns = append(columns, queries.Column{
+					Alias:    field.As,
+					Function: field.Fn,
+					Type:     field.Fn.Type,
+				})
+			}
+		}
 	}
 
 	// Render associations fields
@@ -130,17 +159,21 @@ func generateAssociation(result *reflect.Type, association Association, options 
 			var associationType *reflect.Type
 			if result != nil {
 				resultAux := *result
-				if associationTypeAux, ok := resultAux.FieldByName(include.As); ok {
+				associationTypeAux, ok := resultAux.FieldByName(include.As)
+
+				if ok && !common.ContainsStr(options.Fields.Excludes, include.As) && !common.ContainsInclude(options.Fields.Includes, include.As) {
 					associationType = common.TypeResolver(associationTypeAux.Type)
 				}
 			}
 
 			newColumns, newJoins := generateAssociation(associationType, childAssociation, include, *model, tableAlias)
 			joins = append(joins, newJoins...)
-			columns = append(columns, queries.Column{
-				Alias:  include.As,
-				Nested: &newColumns,
-			})
+			if associationType != nil {
+				columns = append(columns, queries.Column{
+					Alias:  include.As,
+					Nested: &newColumns,
+				})
+			}
 		}
 	}
 

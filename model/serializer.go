@@ -49,7 +49,7 @@ func generateValues(columns []queries.Column) ([]interface{}, map[string]interfa
 	argsStruct := make(map[string]interface{})
 
 	for _, column := range columns {
-		if column.Type != nil {
+		if column.Nested == nil {
 			valueType := *column.Type
 			valueInstance := reflect.New(valueType)
 			if valueType.Kind() == reflect.Ptr {
