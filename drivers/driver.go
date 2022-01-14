@@ -3,7 +3,7 @@ package drivers
 import (
 	"database/sql"
 	"fmt"
-	"github.com/Supersonido/sqlizer/queries"
+	"github.com/go-sqlizer/sqlizer/queries"
 	"strings"
 )
 

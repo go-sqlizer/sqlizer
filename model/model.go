@@ -1,8 +1,8 @@
 package model
 
 import (
-	"github.com/Supersonido/sqlizer/drivers"
-	"github.com/Supersonido/sqlizer/types"
+	"github.com/go-sqlizer/sqlizer/drivers"
+	"github.com/go-sqlizer/sqlizer/types"
 	"reflect"
 )
 

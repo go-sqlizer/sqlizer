@@ -1,7 +1,7 @@
 package queries
 
 import (
-	"github.com/Supersonido/sqlizer/types"
+	"github.com/go-sqlizer/sqlizer/types"
 	"reflect"
 )
 

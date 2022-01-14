@@ -3,7 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
-	"github.com/Supersonido/sqlizer/queries"
+	"github.com/go-sqlizer/sqlizer/queries"
 	"reflect"
 )
 

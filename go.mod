@@ -1,3 +1,3 @@
-module github.com/Supersonido/sqlizer
+module github.com/go-sqlizer/sqlizer
 
 go 1.17

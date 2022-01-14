@@ -1,6 +1,6 @@
 package common
 
-import "github.com/Supersonido/sqlizer/queries"
+import "github.com/go-sqlizer/sqlizer/queries"
 
 func ContainsStr(list []string, findElem string) bool {
 	for _, elem := range list {

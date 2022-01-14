@@ -2,8 +2,8 @@ package model
 
 import (
 	"fmt"
-	"github.com/Supersonido/sqlizer/common"
-	"github.com/Supersonido/sqlizer/queries"
+	"github.com/go-sqlizer/sqlizer/common"
+	"github.com/go-sqlizer/sqlizer/queries"
 	"reflect"
 )
 

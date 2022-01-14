@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/hex"
-	"github.com/Supersonido/sqlizer/common"
-	"github.com/Supersonido/sqlizer/queries"
+	"github.com/go-sqlizer/sqlizer/common"
+	"github.com/go-sqlizer/sqlizer/queries"
 	"reflect"
 )
 
