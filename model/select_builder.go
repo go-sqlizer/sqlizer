@@ -37,27 +37,33 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 
 	// Render Extra fields
 	for _, field := range options.Fields.Includes {
-		if field.Fn == nil {
-			if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
-				fColumn := c.Interface().(Field)
-				fColumnType := reflect.Type(fColumn.Type)
-				columns = append(columns, queries.Column{
-					Alias:        field.As,
-					Type:         &fColumnType,
-					IsPrimaryKey: fColumn.PrimaryKey,
-					Source: &queries.ColumnSource{
-						Alias: tableAlias,
-						Field: fColumn.Field,
-					},
-				})
+		var source *queries.ColumnSource
+		var fColumnType reflect.Type
+		var isPk bool
+
+		if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
+			fColumn := c.Interface().(Field)
+			fColumnType = reflect.Type(fColumn.Type)
+			isPk = fColumn.PrimaryKey
+			source = &queries.ColumnSource{
+				Alias: tableAlias,
+				Field: fColumn.Field,
 			}
+		} else if c, ok := result.FieldByName(field.As); ok {
+			fColumnType = c.Type
+		} else if field.Fn != nil {
+			fColumnType = *field.Fn.Type
 		} else {
-			columns = append(columns, queries.Column{
-				Alias:    field.As,
-				Function: field.Fn,
-				Type:     field.Fn.Type,
-			})
+			panic(fmt.Sprintf("Missing type for field %s.%s", tableAlias, field.As))
 		}
+
+		columns = append(columns, queries.Column{
+			Alias:        field.As,
+			Function:     field.Fn,
+			Type:         &fColumnType,
+			IsPrimaryKey: isPk,
+			Source:       source,
+		})
 	}
 
 	// Render associations fields
@@ -127,27 +133,33 @@ func generateAssociation(result *reflect.Type, association Association, options 
 
 		// Render Extra fields
 		for _, field := range options.Fields.Includes {
-			if field.Fn == nil {
-				if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
-					fColumn := c.Interface().(Field)
-					fColumnType := reflect.Type(fColumn.Type)
-					columns = append(columns, queries.Column{
-						Alias:        field.As,
-						Type:         &fColumnType,
-						IsPrimaryKey: fColumn.PrimaryKey,
-						Source: &queries.ColumnSource{
-							Alias: tableAlias,
-							Field: fColumn.Field,
-						},
-					})
+			var source *queries.ColumnSource
+			var fColumnType reflect.Type
+			var isPk bool
+
+			if c := reflect.ValueOf(model.Columns).FieldByName(field.As); c.IsValid() {
+				fColumn := c.Interface().(Field)
+				fColumnType = reflect.Type(fColumn.Type)
+				isPk = fColumn.PrimaryKey
+				source = &queries.ColumnSource{
+					Alias: tableAlias,
+					Field: fColumn.Field,
 				}
+			} else if c, ok := resultAux.FieldByName(field.As); ok {
+				fColumnType = c.Type
+			} else if field.Fn != nil {
+				fColumnType = *field.Fn.Type
 			} else {
-				columns = append(columns, queries.Column{
-					Alias:    field.As,
-					Function: field.Fn,
-					Type:     field.Fn.Type,
-				})
+				panic(fmt.Sprintf("Missing type for field %s.%s", tableAlias, field.As))
 			}
+
+			columns = append(columns, queries.Column{
+				Alias:        field.As,
+				Function:     field.Fn,
+				Type:         &fColumnType,
+				IsPrimaryKey: isPk,
+				Source:       source,
+			})
 		}
 	}
 
