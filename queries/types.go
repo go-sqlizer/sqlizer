@@ -1,18 +1,20 @@
 package queries
 
 import (
+	"github.com/go-sqlizer/sqlizer/types"
 	"reflect"
 )
 
 type QueryOptions struct {
-	Logging func(...interface{})
-	Where   []Where
-	Limit   *int
-	Offset  *int
-	Include []Include
-	Order   []Order
-	Fields  Fields
-	Group   []ColumnKey
+	Logging     func(...interface{})
+	Where       []Where
+	Limit       *int
+	Offset      *int
+	Include     []Include
+	Order       []Order
+	Fields      Fields
+	Group       []ColumnKey
+	Transaction types.Transaction
 }
 
 type Include struct {

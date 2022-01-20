@@ -34,10 +34,10 @@ func (p *Postgres) Connect(config Config) error {
 	p.CommonDriver = CommonDriver{
 		db:                db,
 		serializer:        queries.SQLSerializer(p),
-		whereOperators:    whereOperators,
-		joinOperators:     joinOperators,
-		orderOperators:    orderOperators,
-		functionOperators: functionOperators,
+		WhereOperators:    whereOperators,
+		JoinOperators:     joinOperators,
+		OrderOperators:    orderOperators,
+		FunctionOperators: functionOperators,
 	}
 
 	return nil

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/go-sqlizer/sqlizer/queries"
+	"github.com/go-sqlizer/sqlizer/types"
 	"strings"
 )
 
@@ -12,17 +13,20 @@ type JoinType string
 type Driver interface {
 	Connect(Config) error
 	Select(query queries.SelectQuery) (*sql.Rows, error)
+	Transaction(func(Transaction) error) error
 	Close()
 }
 
 type CommonDriver struct {
 	db                *sql.DB
 	serializer        queries.SQLSerializer
-	whereOperators    map[string]WhereOperator
-	joinOperators     map[queries.JoinType]JoinOperator
-	orderOperators    map[queries.OrderType]OrderOperator
-	functionOperators map[string]FunctionOperator
+	WhereOperators    map[string]WhereOperator
+	JoinOperators     map[queries.JoinType]JoinOperator
+	OrderOperators    map[queries.OrderType]OrderOperator
+	FunctionOperators map[string]FunctionOperator
 }
+
+type Transaction types.Transaction
 
 func (driver *CommonDriver) Select(query queries.SelectQuery) (*sql.Rows, error) {
 	var extra []string
@@ -32,7 +36,7 @@ func (driver *CommonDriver) Select(query queries.SelectQuery) (*sql.Rows, error)
 	values = append(values, newValues...)
 
 	if len(query.Where) > 0 {
-		where, newValues := driver.whereOperators["and"](nil, query.Where, driver, seq)
+		where, newValues := driver.WhereOperators["and"](nil, query.Where, driver, seq)
 		extra = append(extra, fmt.Sprintf("WHERE %s", where))
 		values = append(values, newValues...)
 	}
@@ -67,7 +71,32 @@ func (driver *CommonDriver) Select(query queries.SelectQuery) (*sql.Rows, error)
 		fmt.Println(statement, values)
 	}
 
-	return driver.db.Query(statement, values...)
+	if query.Transaction != nil {
+		return query.Transaction.Query(statement, values...)
+	} else {
+		return driver.db.Query(statement, values...)
+	}
+}
+
+func (driver *CommonDriver) Transaction(callback func(Transaction) error) (err error) {
+	tx, err := driver.db.Begin()
+	if err != nil {
+		return
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	err = callback(tx)
+	return err
 }
 
 func (driver *CommonDriver) Close() {
@@ -107,7 +136,7 @@ func (driver *CommonDriver) renderColumns(columns *[]queries.Column, prefix stri
 			column.Alias = columnAlias
 			strColumns = append(strColumns, driver.serializer.SerializeColumn(column))
 		} else if column.Function != nil {
-			c, v := driver.functionOperators[column.Function.Operator](column.Function.Values, driver, seq)
+			c, v := driver.FunctionOperators[column.Function.Operator](column.Function.Values, driver, seq)
 			strColumns = append(strColumns, driver.serializer.SerializeAlias(c, columnAlias))
 			values = append(values, v...)
 		}
@@ -145,7 +174,7 @@ func whereNested(linker string) WhereOperator {
 		wheres := value.([]queries.Where)
 		var filters []string
 		for _, where := range wheres {
-			f, v := driver.whereOperators[where.Operator](where.Key, where.Value, driver, seq)
+			f, v := driver.WhereOperators[where.Operator](where.Key, where.Value, driver, seq)
 			filters = append(filters, f)
 			values = append(values, v...)
 		}
@@ -172,7 +201,7 @@ type JoinOperator func(queries.Join, *CommonDriver, ValueSequencer) (string, []i
 
 func commonJoin(joinStr string) JoinOperator {
 	return func(join queries.Join, driver *CommonDriver, seq ValueSequencer) (string, []interface{}) {
-		where, values := driver.whereOperators["and"](nil, join.Where, driver, seq)
+		where, values := driver.WhereOperators["and"](nil, join.Where, driver, seq)
 		return fmt.Sprintf(`%s %s ON %s`, joinStr, driver.serializer.SerializeTableSource(join.To), where), values
 	}
 }
@@ -188,7 +217,7 @@ func (driver *CommonDriver) renderJoins(joins []queries.Join, seq ValueSequencer
 	var values []interface{}
 
 	for _, join := range joins {
-		j, v := driver.joinOperators[join.Type](join, driver, seq)
+		j, v := driver.JoinOperators[join.Type](join, driver, seq)
 		strJoins = append(strJoins, j)
 		values = append(values, v...)
 	}
@@ -223,7 +252,7 @@ func (driver *CommonDriver) renderOrder(orders []queries.Order) string {
 	var orderStr []string
 
 	for _, order := range orders {
-		orderStr = append(orderStr, driver.orderOperators[order.Type](order.Key, driver))
+		orderStr = append(orderStr, driver.OrderOperators[order.Type](order.Key, driver))
 	}
 
 	return strings.Join(orderStr, ", ")
