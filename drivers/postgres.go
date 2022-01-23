@@ -44,36 +44,6 @@ func (p *Postgres) Connect(config Config) error {
 	return nil
 }
 
-func (p *Postgres) Insert(insert queries.BasicQuery) (sql.Result, error) {
-	var columns []string
-	var valueSeq []string
-	var values []interface{}
-	seq := valueSequence()
-
-	for _, column := range insert.Columns {
-		columns = append(columns, column.Source.Field)
-		valueSeq = append(valueSeq, seq())
-		values = append(values, column.Value)
-	}
-
-	statement := fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s);",
-		p.SerializeTableSource(insert.From),
-		strings.Join(columns, ", "),
-		strings.Join(valueSeq, ", "),
-	)
-
-	if insert.Logging != nil {
-		fmt.Println(statement, values)
-	}
-
-	if insert.Transaction != nil {
-		return insert.Transaction.Exec(statement, values...)
-	} else {
-		return p.db.Exec(statement, values...)
-	}
-}
-
 func (p *Postgres) InsertReturning(insert queries.BasicQuery) *sql.Row {
 	var columns []string
 	var valueSeq []string
@@ -82,10 +52,10 @@ func (p *Postgres) InsertReturning(insert queries.BasicQuery) *sql.Row {
 	seq := valueSequence()
 
 	for _, column := range insert.Columns {
-		columns = append(columns, column.Source.Field)
+		columns = append(columns, p.SerializeColumn(column))
 		valueSeq = append(valueSeq, seq())
 		values = append(values, column.Value)
-		returning = append(returning, p.SerializeColumn(column))
+		returning = append(returning, p.SerializeColumnAlias(column))
 	}
 
 	statement := fmt.Sprintf(
@@ -107,6 +77,46 @@ func (p *Postgres) InsertReturning(insert queries.BasicQuery) *sql.Row {
 	}
 }
 
+func (p *Postgres) UpdateReturning(update queries.BasicQuery) *sql.Row {
+	var columns []string
+	var values []interface{}
+	var extra []string
+	var returning []string
+	seq := valueSequence()
+
+	for _, column := range update.Columns {
+		returning = append(returning, p.SerializeColumnAlias(column))
+		if column.Value != nil {
+			columns = append(columns, fmt.Sprintf("%s = %s", p.SerializeColumn(column), seq()))
+			values = append(values, column.Value)
+		}
+	}
+
+	if len(update.Where) > 0 {
+		where, newValues := p.WhereOperators["and"](nil, update.Where, &p.CommonDriver, seq)
+		extra = append(extra, fmt.Sprintf("WHERE %s", where))
+		values = append(values, newValues...)
+	}
+
+	statement := fmt.Sprintf(
+		"UPDATE %s SET %s %s RETURNING %s;",
+		p.serializer.SerializeTableSource(update.From),
+		strings.Join(columns, ", "),
+		strings.Join(extra, "\n"),
+		strings.Join(returning, ", "),
+	)
+
+	if update.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if update.Transaction != nil {
+		return update.Transaction.QueryRow(statement, values...)
+	} else {
+		return p.db.QueryRow(statement, values...)
+	}
+}
+
 func (_ Postgres) connectionString(config Config) string {
 	return fmt.Sprintf(
 		`host=%s port=%d user=%s password=%s dbname=%s sslmode=%s`,
@@ -114,12 +124,16 @@ func (_ Postgres) connectionString(config Config) string {
 
 }
 
-func (_ Postgres) SerializeColumn(column queries.Column) string {
+func (_ Postgres) SerializeColumnAlias(column queries.Column) string {
 	if column.Source.Alias == "" {
 		return fmt.Sprintf(`"%s" AS "%s"`, column.Source.Field, column.Alias)
 	}
 
 	return fmt.Sprintf(`"%s"."%s" AS "%s"`, column.Source.Alias, column.Source.Field, column.Alias)
+}
+
+func (_ Postgres) SerializeColumn(column queries.Column) string {
+	return fmt.Sprintf(`"%s"`, column.Source.Field)
 }
 
 func (_ Postgres) SerializeTableSource(table queries.TableSource) string {
@@ -135,7 +149,11 @@ func (_ Postgres) SerializeTableSource(table queries.TableSource) string {
 	return fmt.Sprintf(`"%s"."%s" AS "%s"`, schema, table.Table, table.Alias)
 }
 
-func (_ Postgres) SerializeColumnKey(key queries.ColumnKey) string {
+func (_ Postgres) SerializeColumnKey(key queries.ColumnValue) string {
+	if key.Alias == "" {
+		return fmt.Sprintf(`"%s"`, key.Field)
+	}
+
 	return fmt.Sprintf(`"%s"."%s"`, key.Alias, key.Field)
 }
 

@@ -13,6 +13,8 @@ type Driver interface {
 	Select(query queries.BasicQuery) (*sql.Rows, error)
 	Insert(insert queries.BasicQuery) (sql.Result, error)
 	InsertReturning(insert queries.BasicQuery) *sql.Row
+	Update(insert queries.BasicQuery) (sql.Result, error)
+	UpdateReturning(insert queries.BasicQuery) *sql.Row
 	Transaction(func(Transaction) error) error
 	Close()
 }
@@ -78,14 +80,14 @@ func (driver *CommonDriver) Select(query queries.BasicQuery) (*sql.Rows, error) 
 	}
 }
 
-func (driver *CommonDriver) Insert(insert queries.BasicQuery) *sql.Row {
+func (driver *CommonDriver) Insert(insert queries.BasicQuery) (sql.Result, error) {
 	var columns []string
 	var valueSeq []string
 	var values []interface{}
 	seq := valueSequence()
 
 	for _, column := range insert.Columns {
-		columns = append(columns, column.Source.Field)
+		columns = append(columns, driver.serializer.SerializeColumn(column))
 		valueSeq = append(valueSeq, seq())
 		values = append(values, column.Value)
 	}
@@ -102,9 +104,46 @@ func (driver *CommonDriver) Insert(insert queries.BasicQuery) *sql.Row {
 	}
 
 	if insert.Transaction != nil {
-		return insert.Transaction.QueryRow(statement, values...)
+		return insert.Transaction.Exec(statement, values...)
 	} else {
-		return driver.db.QueryRow(statement, values...)
+		return driver.db.Exec(statement, values...)
+	}
+}
+
+func (driver *CommonDriver) Update(update queries.BasicQuery) (sql.Result, error) {
+	var columns []string
+	var values []interface{}
+	var extra []string
+	seq := valueSequence()
+
+	for _, column := range update.Columns {
+		if column.Value != nil {
+			columns = append(columns, fmt.Sprintf("%s = %s", driver.serializer.SerializeColumn(column), seq()))
+			values = append(values, column.Value)
+		}
+	}
+
+	if len(update.Where) > 0 {
+		where, newValues := driver.WhereOperators["and"](nil, update.Where, driver, seq)
+		extra = append(extra, fmt.Sprintf("WHERE %s", where))
+		values = append(values, newValues...)
+	}
+
+	statement := fmt.Sprintf(
+		"UPDATE %s SET %s %s;",
+		driver.serializer.SerializeTableSource(update.From),
+		strings.Join(columns, ", "),
+		strings.Join(extra, "\n"),
+	)
+
+	if update.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if update.Transaction != nil {
+		return update.Transaction.Exec(statement, values...)
+	} else {
+		return driver.db.Exec(statement, values...)
 	}
 }
 
@@ -164,7 +203,7 @@ func (driver *CommonDriver) renderColumns(columns *[]queries.Column, prefix stri
 			values = append(values, v...)
 		} else if column.Source != nil {
 			column.Alias = columnAlias
-			strColumns = append(strColumns, driver.serializer.SerializeColumn(column))
+			strColumns = append(strColumns, driver.serializer.SerializeColumnAlias(column))
 		} else if column.Function != nil {
 			c, v := driver.FunctionOperators[column.Function.Operator](column.Function.Values, driver, seq)
 			strColumns = append(strColumns, driver.serializer.SerializeAlias(c, columnAlias))
@@ -185,8 +224,8 @@ func whereComparators(operator string) WhereOperator {
 			filter = key.ToSQL(driver.serializer)
 		} else {
 			switch value.(type) {
-			case queries.ColumnKey:
-				valueStr = driver.serializer.SerializeColumnKey(value.(queries.ColumnKey))
+			case queries.ColumnValue:
+				valueStr = driver.serializer.SerializeColumnKey(value.(queries.ColumnValue))
 			default:
 				values = []interface{}{value}
 				valueStr = seq()
@@ -202,11 +241,19 @@ func whereComparators(operator string) WhereOperator {
 func whereNested(linker string) WhereOperator {
 	return func(_ queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
 		wheres := value.([]queries.Where)
+
+		if len(wheres) == 0 {
+			filter = ""
+			return
+		}
+
 		var filters []string
 		for _, where := range wheres {
 			f, v := driver.WhereOperators[where.Operator](where.Key, where.Value, driver, seq)
-			filters = append(filters, f)
-			values = append(values, v...)
+			if len(f) > 0 {
+				filters = append(filters, f)
+				values = append(values, v...)
+			}
 		}
 
 		filter = fmt.Sprintf("(%s)", strings.Join(filters, linker))
@@ -215,9 +262,9 @@ func whereNested(linker string) WhereOperator {
 }
 
 var whereOperators = map[string]WhereOperator{
-	"and": whereNested("AND"),
-	"or":  whereNested("OR"),
-	"not": whereNested("NOT"),
+	"and": whereNested(" AND "),
+	"or":  whereNested(" OR "),
+	"not": whereNested(" NOT "),
 	"=":   whereComparators("="),
 	"!=":  whereComparators("!="),
 	">":   whereComparators(">"),
@@ -255,7 +302,7 @@ func (driver *CommonDriver) renderJoins(joins []queries.Join, seq ValueSequencer
 	return strJoins, values
 }
 
-func (driver *CommonDriver) renderGroups(groups []queries.ColumnKey) string {
+func (driver *CommonDriver) renderGroups(groups []queries.ColumnValue) string {
 	var groupStr []string
 
 	for _, group := range groups {
@@ -297,8 +344,8 @@ func commonFunction(fnName string, extra string) FunctionOperator {
 
 		for _, value := range fnValues {
 			switch value.(type) {
-			case queries.ColumnKey:
-				valueStr = append(valueStr, driver.serializer.SerializeColumnKey(value.(queries.ColumnKey)))
+			case queries.ColumnValue:
+				valueStr = append(valueStr, driver.serializer.SerializeColumnKey(value.(queries.ColumnValue)))
 			default:
 				values = append(values, value)
 				valueStr = append(valueStr, seq())

@@ -209,8 +209,8 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				Where: append(
 					[]queries.Where{
 						queries.Eq(
-							queries.ColumnKey{Alias: parenAlias, Field: parent.FieldFromName(association.Properties.ForeignKey).Field},
-							queries.ColumnKey{Alias: tableAlias, Field: association.Model.primaryKey.Field},
+							queries.ColumnValue{Alias: parenAlias, Field: parent.FieldFromName(association.Properties.ForeignKey).Field},
+							queries.ColumnValue{Alias: tableAlias, Field: association.Model.primaryKey.Field},
 						),
 					},
 					options.Where...,
@@ -230,8 +230,8 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				Where: append(
 					[]queries.Where{
 						queries.Eq(
-							queries.ColumnKey{Alias: parenAlias, Field: parent.primaryKey.Field},
-							queries.ColumnKey{Alias: tableAlias, Field: model.FieldFromName(association.Properties.ForeignKey).Field},
+							queries.ColumnValue{Alias: parenAlias, Field: parent.primaryKey.Field},
+							queries.ColumnValue{Alias: tableAlias, Field: model.FieldFromName(association.Properties.ForeignKey).Field},
 						),
 					},
 					options.Where...,
@@ -253,8 +253,8 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				},
 				Where: []queries.Where{
 					queries.Eq(
-						queries.ColumnKey{Alias: parenAlias, Field: parent.primaryKey.Field},
-						queries.ColumnKey{Alias: parentAliasAux, Field: through.FieldFromName(association.Properties.ForeignKey).Field},
+						queries.ColumnValue{Alias: parenAlias, Field: parent.primaryKey.Field},
+						queries.ColumnValue{Alias: parentAliasAux, Field: through.FieldFromName(association.Properties.ForeignKey).Field},
 					),
 				},
 			},
@@ -269,8 +269,8 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				Where: append(
 					[]queries.Where{
 						queries.Eq(
-							queries.ColumnKey{Alias: parentAliasAux, Field: association.Properties.Through.FieldFromName(assoc.Properties.ForeignKey).Field},
-							queries.ColumnKey{Alias: tableAlias, Field: association.Model.primaryKey.Field},
+							queries.ColumnValue{Alias: parentAliasAux, Field: association.Properties.Through.FieldFromName(assoc.Properties.ForeignKey).Field},
+							queries.ColumnValue{Alias: tableAlias, Field: association.Model.primaryKey.Field},
 						),
 					},
 					options.Where...,

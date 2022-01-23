@@ -12,7 +12,7 @@ type QueryOptions struct {
 	Include     []Include
 	Order       []Order
 	Fields      Fields
-	Group       []ColumnKey
+	Group       []ColumnValue
 	Logging     func(...interface{})
 	Transaction types.Transaction
 }
@@ -20,6 +20,12 @@ type QueryOptions struct {
 type InsertOptions struct {
 	Logging     func(...interface{})
 	Transaction types.Transaction
+}
+
+type UpdateOptions struct {
+	Logging     func(...interface{})
+	Transaction types.Transaction
+	Where       []Where
 }
 
 type Include struct {
@@ -76,12 +82,12 @@ type ColumnSource struct {
 	Field string
 }
 
-type ColumnKey struct {
+type ColumnValue struct {
 	Alias string
 	Field string
 }
 
-func (ck ColumnKey) ToSQL(serializer SQLSerializer) string {
+func (ck ColumnValue) ToSQL(serializer SQLSerializer) string {
 	return serializer.SerializeColumnKey(ck)
 }
 
