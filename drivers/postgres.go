@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/go-sqlizer/sqlizer/queries"
+	"strings"
 )
 
 type Postgres struct {
@@ -43,6 +44,69 @@ func (p *Postgres) Connect(config Config) error {
 	return nil
 }
 
+func (p *Postgres) Insert(insert queries.BasicQuery) (sql.Result, error) {
+	var columns []string
+	var valueSeq []string
+	var values []interface{}
+	seq := valueSequence()
+
+	for _, column := range insert.Columns {
+		columns = append(columns, column.Source.Field)
+		valueSeq = append(valueSeq, seq())
+		values = append(values, column.Value)
+	}
+
+	statement := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s);",
+		p.SerializeTableSource(insert.From),
+		strings.Join(columns, ", "),
+		strings.Join(valueSeq, ", "),
+	)
+
+	if insert.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if insert.Transaction != nil {
+		return insert.Transaction.Exec(statement, values...)
+	} else {
+		return p.db.Exec(statement, values...)
+	}
+}
+
+func (p *Postgres) InsertReturning(insert queries.BasicQuery) *sql.Row {
+	var columns []string
+	var valueSeq []string
+	var values []interface{}
+	var returning []string
+	seq := valueSequence()
+
+	for _, column := range insert.Columns {
+		columns = append(columns, column.Source.Field)
+		valueSeq = append(valueSeq, seq())
+		values = append(values, column.Value)
+		returning = append(returning, p.SerializeColumn(column))
+	}
+
+	statement := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s) RETURNING %s;",
+		p.SerializeTableSource(insert.From),
+		strings.Join(columns, ", "),
+		strings.Join(valueSeq, ", "),
+		strings.Join(returning, ", "),
+	)
+
+	if insert.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if insert.Transaction != nil {
+		return insert.Transaction.QueryRow(statement, values...)
+	} else {
+		return p.db.QueryRow(statement, values...)
+	}
+}
+
 func (_ Postgres) connectionString(config Config) string {
 	return fmt.Sprintf(
 		`host=%s port=%d user=%s password=%s dbname=%s sslmode=%s`,
@@ -62,6 +126,10 @@ func (_ Postgres) SerializeTableSource(table queries.TableSource) string {
 	schema := table.Schema
 	if schema == "" {
 		schema = "public"
+	}
+
+	if table.Alias == "" {
+		return fmt.Sprintf(`"%s"."%s"`, schema, table.Table)
 	}
 
 	return fmt.Sprintf(`"%s"."%s" AS "%s"`, schema, table.Table, table.Alias)

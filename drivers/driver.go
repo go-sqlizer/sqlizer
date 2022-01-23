@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-type JoinType string
-
 type Driver interface {
 	Connect(Config) error
-	Select(query queries.SelectQuery) (*sql.Rows, error)
+	Select(query queries.BasicQuery) (*sql.Rows, error)
+	Insert(insert queries.BasicQuery) (sql.Result, error)
+	InsertReturning(insert queries.BasicQuery) *sql.Row
 	Transaction(func(Transaction) error) error
 	Close()
 }
@@ -28,7 +28,7 @@ type CommonDriver struct {
 
 type Transaction types.Transaction
 
-func (driver *CommonDriver) Select(query queries.SelectQuery) (*sql.Rows, error) {
+func (driver *CommonDriver) Select(query queries.BasicQuery) (*sql.Rows, error) {
 	var extra []string
 	seq := valueSequence()
 	columns, values := driver.renderColumns(&query.Columns, "", seq)
@@ -75,6 +75,36 @@ func (driver *CommonDriver) Select(query queries.SelectQuery) (*sql.Rows, error)
 		return query.Transaction.Query(statement, values...)
 	} else {
 		return driver.db.Query(statement, values...)
+	}
+}
+
+func (driver *CommonDriver) Insert(insert queries.BasicQuery) *sql.Row {
+	var columns []string
+	var valueSeq []string
+	var values []interface{}
+	seq := valueSequence()
+
+	for _, column := range insert.Columns {
+		columns = append(columns, column.Source.Field)
+		valueSeq = append(valueSeq, seq())
+		values = append(values, column.Value)
+	}
+
+	statement := fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s);",
+		driver.serializer.SerializeTableSource(insert.From),
+		strings.Join(columns, ", "),
+		strings.Join(valueSeq, ", "),
+	)
+
+	if insert.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if insert.Transaction != nil {
+		return insert.Transaction.QueryRow(statement, values...)
+	} else {
+		return driver.db.QueryRow(statement, values...)
 	}
 }
 

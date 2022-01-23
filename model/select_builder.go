@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func SelectBuilder(result reflect.Type, model Model, options queries.QueryOptions) queries.SelectQuery {
+func SelectBuilder(result reflect.Type, model Model, options queries.QueryOptions) queries.BasicQuery {
 	var columns []queries.Column
 	var joins []queries.Join
 	tableAlias := model.Name
@@ -88,7 +88,7 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 		}
 	}
 
-	return queries.SelectQuery{
+	return queries.BasicQuery{
 		QueryOptions: options,
 		Columns:      columns,
 		Joins:        joins,

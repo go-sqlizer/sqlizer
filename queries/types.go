@@ -6,7 +6,6 @@ import (
 )
 
 type QueryOptions struct {
-	Logging     func(...interface{})
 	Where       []Where
 	Limit       *int
 	Offset      *int
@@ -14,6 +13,12 @@ type QueryOptions struct {
 	Order       []Order
 	Fields      Fields
 	Group       []ColumnKey
+	Logging     func(...interface{})
+	Transaction types.Transaction
+}
+
+type InsertOptions struct {
+	Logging     func(...interface{})
 	Transaction types.Transaction
 }
 
@@ -41,12 +46,19 @@ type PaginateOptions struct {
 	PerPage int
 }
 
-type SelectQuery struct {
+type BasicQuery struct {
 	Columns []Column
 	From    TableSource
 	Joins   []Join
-	Values  []interface{}
 	QueryOptions
+}
+
+type InsertQuery struct {
+	Columns   []Column
+	From      TableSource
+	Values    []interface{}
+	Returning *reflect.Value
+	InsertOptions
 }
 
 type Column struct {
@@ -56,6 +68,7 @@ type Column struct {
 	Source       *ColumnSource
 	Function     *Function
 	IsPrimaryKey bool
+	Value        interface{}
 }
 
 type ColumnSource struct {

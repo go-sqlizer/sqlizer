@@ -15,7 +15,7 @@ type rowHashTable struct {
 	Index      int
 }
 
-func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.Rows) (err error) {
+func SerializeResults(result reflect.Value, query queries.BasicQuery, row *sql.Rows) (err error) {
 	defer common.CaptureError(&err, "Invalid Destination Model")
 
 	err = row.Err()
@@ -41,6 +41,24 @@ func SerializeResults(result reflect.Value, query queries.SelectQuery, row *sql.
 	}
 
 	result.Set(resultAux)
+	return nil
+}
+
+func SerializeResult(result reflect.Value, query queries.BasicQuery, row *sql.Row) (err error) {
+	defer common.CaptureError(&err, "Invalid Destination Model")
+
+	err = row.Err()
+	if err != nil {
+		return err
+	}
+
+	// Generate basic row result
+	scanArgs, argsStruct := generateValues(query.Columns)
+	if err = row.Scan(scanArgs...); err != nil {
+		return err
+	}
+
+	setValues(&result, &argsStruct, query.Columns, nil, "")
 	return nil
 }
 
@@ -130,7 +148,7 @@ func renderValueSlice(elem reflect.Value) reflect.Value {
 	return elem
 }
 
-func processNewValue(query *queries.SelectQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]rowHashTable) {
+func processNewValue(query *queries.BasicQuery, result *reflect.Value, resultType *reflect.Type, row *map[string]interface{}, resultHashTable *map[string]rowHashTable) {
 	var resultInstance *reflect.Value
 	var nestedHashTable *map[string]rowHashTable
 
