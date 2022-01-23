@@ -29,9 +29,9 @@ func (model Model) FindAll(result interface{}, options queries.QueryOptions) err
 	return SerializeResults(resultListValue, query, rows)
 }
 
-func (model Model) Paginate(result interface{}, options queries.QueryOptions) error {
-	return nil
-}
+//func (model Model) Paginate(result interface{}, options queries.QueryOptions) error {
+//	return nil
+//}
 
 func (model Model) Insert(data interface{}, result interface{}, options queries.InsertOptions) error {
 	dataValue := reflect.ValueOf(data)
@@ -61,6 +61,6 @@ func (model Model) Insert(data interface{}, result interface{}, options queries.
 	return err
 }
 
-func (model Model) BulkInsert(data interface{}, result interface{}, options queries.InsertOptions) error {
-	return nil
-}
+//func (model Model) BulkInsert(data interface{}, result interface{}, options queries.InsertOptions) error {
+//	return nil
+//}
