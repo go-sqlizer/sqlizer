@@ -101,3 +101,27 @@ func (model Model) UpdateByPk(pk interface{}, data interface{}, result interface
 
 	return model.Update(data, result, options)
 }
+
+func (model Model) Delete(options queries.DeleteOptions) error {
+	_, err := model.driver.Delete(queries.BasicQuery{
+		From: queries.TableSource{
+			Schema: model.Schema,
+			Table:  model.Table,
+		},
+		QueryOptions: queries.QueryOptions{
+			Transaction: options.Transaction,
+			Logging:     options.Logging,
+			Where:       options.Where,
+		},
+	})
+	return err
+}
+
+func (model Model) DeleteByPk(pk interface{}, options queries.DeleteOptions) error {
+	options.Where = []queries.Where{
+		queries.Eq(queries.ColumnValue{Field: model.primaryKey.Field}, pk),
+		queries.And(options.Where...),
+	}
+
+	return model.Delete(options)
+}

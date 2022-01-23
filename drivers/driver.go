@@ -15,6 +15,7 @@ type Driver interface {
 	InsertReturning(insert queries.BasicQuery) *sql.Row
 	Update(insert queries.BasicQuery) (sql.Result, error)
 	UpdateReturning(insert queries.BasicQuery) *sql.Row
+	Delete(delete queries.BasicQuery) (sql.Result, error)
 	Transaction(func(Transaction) error) error
 	Close()
 }
@@ -133,6 +134,34 @@ func (driver *CommonDriver) Update(update queries.BasicQuery) (sql.Result, error
 		"UPDATE %s SET %s %s;",
 		driver.serializer.SerializeTableSource(update.From),
 		strings.Join(columns, ", "),
+		strings.Join(extra, "\n"),
+	)
+
+	if update.Logging != nil {
+		fmt.Println(statement, values)
+	}
+
+	if update.Transaction != nil {
+		return update.Transaction.Exec(statement, values...)
+	} else {
+		return driver.db.Exec(statement, values...)
+	}
+}
+
+func (driver *CommonDriver) Delete(update queries.BasicQuery) (sql.Result, error) {
+	var values []interface{}
+	var extra []string
+	seq := valueSequence()
+
+	if len(update.Where) > 0 {
+		where, newValues := driver.WhereOperators["and"](nil, update.Where, driver, seq)
+		extra = append(extra, fmt.Sprintf("WHERE %s", where))
+		values = append(values, newValues...)
+	}
+
+	statement := fmt.Sprintf(
+		"DELETE FROM %s %s;",
+		driver.serializer.SerializeTableSource(update.From),
 		strings.Join(extra, "\n"),
 	)
 

@@ -28,6 +28,12 @@ type UpdateOptions struct {
 	Where       []Where
 }
 
+type DeleteOptions struct {
+	Logging     func(...interface{})
+	Transaction types.Transaction
+	Where       []Where
+}
+
 type Include struct {
 	As       string
 	Include  []Include
