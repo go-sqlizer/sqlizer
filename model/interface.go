@@ -123,10 +123,6 @@ func (model Model) Insert(data interface{}, result interface{}, options queries.
 	return err
 }
 
-//func (model Model) BulkInsert(data interface{}, result interface{}, options queries.InsertOptions) error {
-//	return nil
-//}
-
 func (model Model) Update(data interface{}, result interface{}, options queries.UpdateOptions) error {
 	dataValue := reflect.ValueOf(data)
 	if dataValue.Kind() != reflect.Struct {

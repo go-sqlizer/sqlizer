@@ -300,7 +300,18 @@ var whereOperators = map[string]WhereOperator{
 	">=":  whereComparators(">="),
 	"<":   whereComparators("<"),
 	"<=":  whereComparators("<="),
-	"in":  nil,
+	"in": func(key queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
+		opValues := value.([]interface{})
+
+		var valueStr []string
+		for _, v := range opValues {
+			valueStr = append(valueStr, seq())
+			values = append(values, v)
+		}
+
+		filter = fmt.Sprintf("%s IN (%s)", key.ToSQL(driver.serializer), strings.Join(valueStr, ", "))
+		return
+	},
 }
 
 type JoinOperator func(queries.Join, *CommonDriver, ValueSequencer) (string, []interface{})
