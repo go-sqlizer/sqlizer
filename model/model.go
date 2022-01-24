@@ -12,8 +12,8 @@ type Model struct {
 	Table        string
 	Columns      interface{}
 	Associations interface{}
-	primaryKey *Field
-	driver     drivers.Driver
+	primaryKey   *Field
+	driver       drivers.Driver
 }
 
 type Field struct {
@@ -27,7 +27,7 @@ type Field struct {
 	VirtualField bool
 }
 
-func (model *Model) Init(driver drivers.Driver) {
+func (model *Model) Init(driver drivers.Driver) *Model {
 	// Find PrimaryKey
 	columnsType := reflect.ValueOf(model.Columns)
 	for i := 0; i < columnsType.NumField(); i++ {
@@ -40,6 +40,8 @@ func (model *Model) Init(driver drivers.Driver) {
 
 	// Save driver
 	model.driver = driver
+
+	return model
 }
 
 func (model Model) FieldFromName(name string) Field {
