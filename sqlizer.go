@@ -1,6 +1,5 @@
 package sqlizer
 
-import "C"
 import (
 	"github.com/go-sqlizer/sqlizer/drivers"
 	"github.com/go-sqlizer/sqlizer/model"
