@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"github.com/go-sqlizer/sqlizer/queries"
+	"math"
 	"reflect"
 )
 
@@ -29,9 +30,70 @@ func (model Model) FindAll(result interface{}, options queries.QueryOptions) err
 	return SerializeResults(resultListValue, query, rows)
 }
 
-//func (model Model) Paginate(result interface{}, options queries.QueryOptions) error {
-//	return nil
-//}
+func (model Model) FindOne(result interface{}, options queries.QueryOptions) error {
+	resultPointerValue := reflect.ValueOf(result)
+	if resultPointerValue.Kind() != reflect.Ptr {
+		return errors.New("result must start as a pointer")
+	}
+
+	resultValue := resultPointerValue.Elem()
+	if resultValue.Kind() != reflect.Struct {
+		return errors.New("result must be a struct")
+	}
+
+	resultType := resultValue.Type()
+	query := SelectBuilder(resultType, model, options)
+	rows, err := model.driver.Select(query)
+	if err != nil {
+		return err
+	}
+
+	rows.Next()
+	return SerializeResult(resultValue, query, rows)
+}
+
+func (model Model) Count(options queries.QueryOptions) (*uint, error) {
+	var count []struct{ Count uint }
+	options.Fields = queries.Fields{
+		Includes: []queries.Field{
+			{As: "Count", Fn: queries.Count(queries.ColumnValue{Alias: model.Name, Field: model.primaryKey.Field})},
+		},
+	}
+
+	if len(options.Group) > 0 {
+		options.Fields.Includes = append(options.Fields.Includes, queries.Field{As: "Id"})
+	}
+
+	if err := model.FindAll(&count, options); err != nil {
+		return nil, err
+	}
+
+	countLen := uint(len(count))
+	if countLen == 1 {
+		return &count[0].Count, nil
+	}
+
+	return &countLen, nil
+}
+
+func (model Model) Paginate(result interface{}, options queries.PaginateOptions) (*queries.PaginateResults, error) {
+	total, err := model.Count(options.QueryOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	pages := math.Ceil(float64(*total / options.PerPage))
+	limit := int(options.PerPage)
+	offset := int(options.PerPage * (options.Page - 1))
+
+	options.Limit = &limit
+	options.Offset = &offset
+	if err = model.FindAll(result, options.QueryOptions); err != nil {
+		return nil, err
+	}
+
+	return &queries.PaginateResults{Total: *total, Pages: uint(pages), Page: options.Page, PerPage: options.PerPage}, nil
+}
 
 func (model Model) Insert(data interface{}, result interface{}, options queries.InsertOptions) error {
 	dataValue := reflect.ValueOf(data)

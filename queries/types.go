@@ -54,8 +54,15 @@ type Field struct {
 
 type PaginateOptions struct {
 	QueryOptions
-	Page    int
-	PerPage int
+	Page    uint
+	PerPage uint
+}
+
+type PaginateResults struct {
+	Total   uint
+	Pages   uint
+	Page    uint
+	PerPage uint
 }
 
 type BasicQuery struct {

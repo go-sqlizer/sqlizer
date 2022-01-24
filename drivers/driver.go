@@ -55,11 +55,11 @@ func (driver *CommonDriver) Select(query queries.BasicQuery) (*sql.Rows, error) 
 	}
 
 	if query.Limit != nil {
-		extra = append(extra, fmt.Sprintf("LIMIT %driver", *query.Limit))
+		extra = append(extra, fmt.Sprintf("LIMIT %d", *query.Limit))
 	}
 
 	if query.Offset != nil {
-		extra = append(extra, fmt.Sprintf("OFFSET %driver", *query.Offset))
+		extra = append(extra, fmt.Sprintf("OFFSET %d", *query.Offset))
 	}
 
 	statement := fmt.Sprintf(

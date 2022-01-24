@@ -2,7 +2,6 @@ package model
 
 import (
 	"crypto/md5"
-	"database/sql"
 	"encoding/hex"
 	"github.com/go-sqlizer/sqlizer/common"
 	"github.com/go-sqlizer/sqlizer/queries"
@@ -15,7 +14,18 @@ type rowHashTable struct {
 	Index      int
 }
 
-func SerializeResults(result reflect.Value, query queries.BasicQuery, row *sql.Rows) (err error) {
+type SqlRows interface {
+	Err() error
+	Scan(dest ...interface{}) error
+	Next() bool
+}
+
+type SqlRow interface {
+	Scan(dest ...interface{}) error
+	Err() error
+}
+
+func SerializeResults(result reflect.Value, query queries.BasicQuery, row SqlRows) (err error) {
 	defer common.CaptureError(&err, "Invalid Destination Model")
 
 	err = row.Err()
@@ -32,7 +42,6 @@ func SerializeResults(result reflect.Value, query queries.BasicQuery, row *sql.R
 	resultType := resultListType.Elem()
 	for row.Next() {
 		scanArgs, argsStruct := generateValues(query.Columns)
-
 		if err = row.Scan(scanArgs...); err != nil {
 			return err
 		}
@@ -44,7 +53,7 @@ func SerializeResults(result reflect.Value, query queries.BasicQuery, row *sql.R
 	return nil
 }
 
-func SerializeResult(result reflect.Value, query queries.BasicQuery, row *sql.Row) (err error) {
+func SerializeResult(result reflect.Value, query queries.BasicQuery, row SqlRow) (err error) {
 	defer common.CaptureError(&err, "Invalid Destination Model")
 
 	err = row.Err()
@@ -219,7 +228,9 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 		case reflect.Value:
 			val := item.(reflect.Value)
 			if !val.IsNil() {
-				result.FieldByName(fieldName).Set(val.Elem())
+				if resultField := result.FieldByName(fieldName); resultField.IsValid() {
+					resultField.Set(val.Elem())
+				}
 			} else {
 				nilCounter++
 			}
