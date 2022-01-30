@@ -27,29 +27,73 @@ func (model Model) FindAll(result interface{}, options queries.QueryOptions) err
 		return err
 	}
 
+	defer rows.Close()
 	return SerializeResults(resultListValue, query, rows)
 }
 
 func (model Model) FindOne(result interface{}, options queries.QueryOptions) error {
-	resultPointerValue := reflect.ValueOf(result)
+	resultPointerValue := reflect.TypeOf(result)
 	if resultPointerValue.Kind() != reflect.Ptr {
 		return errors.New("result must start as a pointer")
 	}
 
-	resultValue := resultPointerValue.Elem()
-	if resultValue.Kind() != reflect.Struct {
-		return errors.New("result must be a struct")
+	resultPointerValue = resultPointerValue.Elem()
+	if resultPointerValue.Kind() != reflect.Ptr {
+		return errors.New("result must continue as a pointer")
 	}
 
-	resultType := resultValue.Type()
-	query := SelectBuilder(resultType, model, options)
-	rows, err := model.driver.Select(query)
-	if err != nil {
+	resultType := resultPointerValue.Elem()
+	if resultType.Kind() != reflect.Struct {
+		return errors.New("result must be a struct at the end")
+	}
+
+	limit := 1
+	options.Limit = &limit
+	elemSliceValue := reflect.New(reflect.SliceOf(resultType))
+	elemSlice := elemSliceValue.Interface()
+	if err := model.FindAll(elemSlice, options); err != nil {
 		return err
 	}
 
-	rows.Next()
-	return SerializeResult(resultValue, query, rows)
+	if elemSliceValue.Elem().Len() > 0 {
+		reflect.ValueOf(result).Elem().Set(elemSliceValue.Elem().Index(0).Addr())
+	}
+
+	return nil
+}
+
+func (model Model) FindByPk(pk interface{}, result interface{}, options queries.QueryOptions) error {
+	resultPointerValue := reflect.TypeOf(result)
+	if resultPointerValue.Kind() != reflect.Ptr {
+		return errors.New("result must start as a pointer")
+	}
+
+	resultPointerValue = resultPointerValue.Elem()
+	if resultPointerValue.Kind() != reflect.Ptr {
+		return errors.New("result must continue as a pointer")
+	}
+
+	resultType := resultPointerValue.Elem()
+	if resultType.Kind() != reflect.Struct {
+		return errors.New("result must be a struct at the end")
+	}
+
+	options.Where = []queries.Where{
+		queries.Eq(queries.ColumnValue{Alias: model.Name, Field: model.primaryKey.Field}, pk),
+		queries.And(options.Where...),
+	}
+
+	elemSliceValue := reflect.New(reflect.SliceOf(resultType))
+	elemSlice := elemSliceValue.Interface()
+	if err := model.FindAll(elemSlice, options); err != nil {
+		return err
+	}
+
+	if elemSliceValue.Elem().Len() > 0 {
+		reflect.ValueOf(result).Elem().Set(elemSliceValue.Elem().Index(0).Addr())
+	}
+
+	return nil
 }
 
 func (model Model) Count(options queries.QueryOptions) (*uint, error) {
@@ -82,7 +126,7 @@ func (model Model) Paginate(result interface{}, options queries.PaginateOptions)
 		return nil, err
 	}
 
-	pages := math.Ceil(float64(*total / options.PerPage))
+	pages := math.Ceil(float64(*total) / float64(options.PerPage))
 	limit := int(options.PerPage)
 	offset := int(options.PerPage * (options.Page - 1))
 

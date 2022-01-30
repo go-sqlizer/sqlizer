@@ -23,11 +23,16 @@ func InsertBuilder(data reflect.Value, result *reflect.Type, model Model, option
 				Field: field.Field,
 			},
 			IsPrimaryKey: field.PrimaryKey,
-			Value:        field.DefaultValue,
 		}
 
 		if dataValue.IsValid() {
 			column.Value = dataValue.Interface()
+		} else if field.DefaultValue != nil {
+			if v := reflect.ValueOf(field.DefaultValue); v.Kind() == reflect.Func {
+				column.Value = v.Call([]reflect.Value{})[0].Interface()
+			} else {
+				column.Value = field.DefaultValue
+			}
 		}
 
 		if result != nil {
