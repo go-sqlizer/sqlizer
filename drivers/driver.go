@@ -10,6 +10,7 @@ import (
 
 type Driver interface {
 	Connect(Config) error
+	GetConnection() *sql.DB
 	Select(query queries.BasicQuery) (*sql.Rows, error)
 	Insert(insert queries.BasicQuery) (sql.Result, error)
 	InsertReturning(insert queries.BasicQuery) *sql.Row
@@ -30,6 +31,10 @@ type CommonDriver struct {
 }
 
 type Transaction types.Transaction
+
+func (driver *CommonDriver) GetConnection() *sql.DB {
+	return driver.db
+}
 
 func (driver *CommonDriver) Select(query queries.BasicQuery) (*sql.Rows, error) {
 	var extra []string

@@ -24,6 +24,8 @@ func (c Config) Init() drivers.Driver {
 	switch c.Connection.Dialect {
 	case "postgres":
 		Conn = &drivers.Postgres{}
+	case "sqlite3":
+		Conn = &drivers.Sqlite3{}
 	default:
 		panic("Invalid dialect")
 	}
