@@ -195,6 +195,11 @@ func generateAssociation(result *reflect.Type, association Association, options 
 func generateJoin(association Association, options queries.Include, tableAlias string, parent Model, parenAlias string) []queries.Join {
 	model := association.Model
 
+	primaryKey := queries.ColumnValue{Alias: parenAlias, Field: parent.primaryKey.Field}
+	if association.Properties.SourceKey != "" {
+		primaryKey = queries.ColumnValue{Alias: parenAlias, Field: parent.FieldFromName(association.Properties.SourceKey).Field}
+	}
+
 	switch association.Type {
 	case BelongsToAssociation:
 		return []queries.Join{
@@ -230,7 +235,7 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				Where: append(
 					[]queries.Where{
 						queries.Eq(
-							queries.ColumnValue{Alias: parenAlias, Field: parent.primaryKey.Field},
+							primaryKey,
 							queries.ColumnValue{Alias: tableAlias, Field: model.FieldFromName(association.Properties.ForeignKey).Field},
 						),
 					},
