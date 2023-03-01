@@ -18,4 +18,8 @@ var (
 	TimePtrType            = FieldType(reflect.TypeOf((*time.Time)(nil)))
 	BooleanType            = FieldType(reflect.TypeOf((*bool)(nil)).Elem())
 	BooleanPtrType         = FieldType(reflect.TypeOf((*bool)(nil)))
+	Float32Type            = FieldType(reflect.TypeOf((*float32)(nil)).Elem())
+	Float32PtrType         = FieldType(reflect.TypeOf((*float32)(nil)))
+	Float64Type            = FieldType(reflect.TypeOf((*float64)(nil)).Elem())
+	Float64PtrType         = FieldType(reflect.TypeOf((*float64)(nil)))
 )
