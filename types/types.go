@@ -17,5 +17,5 @@ var (
 	TimeType               = FieldType(reflect.TypeOf((*time.Time)(nil)).Elem())
 	TimePtrType            = FieldType(reflect.TypeOf((*time.Time)(nil)))
 	BooleanType            = FieldType(reflect.TypeOf((*bool)(nil)).Elem())
-	BooleanPrtType         = FieldType(reflect.TypeOf((*bool)(nil)))
+	BooleanPtrType         = FieldType(reflect.TypeOf((*bool)(nil)))
 )
