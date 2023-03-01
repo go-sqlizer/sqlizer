@@ -15,7 +15,7 @@ var (
 	UnsignedIntegerType    = FieldType(reflect.TypeOf((*uint)(nil)).Elem())
 	UnsignedIntegerPtrType = FieldType(reflect.TypeOf((*uint)(nil)))
 	TimeType               = FieldType(reflect.TypeOf((*time.Time)(nil)).Elem())
-	TimePrtType            = FieldType(reflect.TypeOf((*time.Time)(nil)))
+	TimePtrType            = FieldType(reflect.TypeOf((*time.Time)(nil)))
 	BooleanType            = FieldType(reflect.TypeOf((*bool)(nil)).Elem())
 	BooleanPrtType         = FieldType(reflect.TypeOf((*bool)(nil)))
 )
