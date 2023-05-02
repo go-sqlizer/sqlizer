@@ -19,8 +19,8 @@ type Model struct {
 type Field struct {
 	Field        string
 	Type         types.FieldType
-	Get          *func(model interface{}) interface{}
-	Set          *func(model interface{}, value interface{}) interface{}
+	Get          func(model interface{}) interface{}
+	Set          func(model interface{}, value interface{}) interface{}
 	AllowNull    bool
 	PrimaryKey   bool
 	DefaultValue interface{}

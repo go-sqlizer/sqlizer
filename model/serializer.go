@@ -46,6 +46,7 @@ func SerializeResults(result reflect.Value, query queries.BasicQuery, row SqlRow
 			return err
 		}
 
+		runColumnSetters(scanArgs, query.Columns)
 		processNewValue(&query, &resultAux, &resultType, &argsStruct, &resultHashTable)
 	}
 
@@ -67,6 +68,7 @@ func SerializeResult(result reflect.Value, query queries.BasicQuery, row SqlRow)
 		return err
 	}
 
+	runColumnSetters(scanArgs, query.Columns)
 	setValues(&result, &argsStruct, query.Columns, nil, "")
 	return nil
 }
@@ -96,6 +98,23 @@ func generateValues(columns []queries.Column) ([]interface{}, map[string]interfa
 	}
 
 	return scanArgs, argsStruct
+}
+
+func runColumnSetters(scanArgs []interface{}, columns []queries.Column) {
+	for _, column := range columns {
+		if column.Nested == nil {
+			scanArg, scanArgsTmp := scanArgs[0], scanArgs[1:]
+			scanArgs = scanArgsTmp
+
+			if column.Get != nil {
+				value := reflect.ValueOf(scanArg)
+				actualElem := value.Elem()
+				actualElem.Set(reflect.ValueOf(column.Get(actualElem.Interface())))
+			}
+		} else {
+			runColumnSetters(scanArgs, *column.Nested)
+		}
+	}
 }
 
 func renderValue(resultType reflect.Type) reflect.Value {

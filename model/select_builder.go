@@ -27,6 +27,8 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 				Alias:        resultField.Name,
 				Type:         &resultField.Type,
 				IsPrimaryKey: field.PrimaryKey,
+				Get:          field.Get,
+				Set:          field.Set,
 				Source: &queries.ColumnSource{
 					Alias: tableAlias,
 					Field: field.Field,
@@ -123,6 +125,8 @@ func generateAssociation(result *reflect.Type, association Association, options 
 					Alias:        resultField.Name,
 					Type:         &resultField.Type,
 					IsPrimaryKey: field.PrimaryKey,
+					Get:          field.Get,
+					Set:          field.Set,
 					Source: &queries.ColumnSource{
 						Alias: tableAlias,
 						Field: field.Field,

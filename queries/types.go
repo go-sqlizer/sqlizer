@@ -87,6 +87,8 @@ type Column struct {
 	Source       *ColumnSource
 	Function     *Function
 	IsPrimaryKey bool
+	Get          func(model interface{}) interface{}
+	Set          func(model interface{}, value interface{}) interface{}
 	Value        interface{}
 }
 
