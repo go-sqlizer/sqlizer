@@ -272,6 +272,27 @@ func whereComparators(operator string) WhereOperator {
 	}
 }
 
+func whereVerbs(operator string) WhereOperator {
+	return func(key queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
+		var valueStr string
+		if value == nil {
+			valueStr = "null"
+		} else {
+			switch value.(type) {
+			case queries.ColumnValue:
+				valueStr = driver.serializer.SerializeColumnKey(value.(queries.ColumnValue))
+			default:
+				values = []interface{}{value}
+				valueStr = seq()
+			}
+
+		}
+
+		filter = fmt.Sprintf("%s %s %s", key.ToSQL(driver.serializer), operator, valueStr)
+		return
+	}
+}
+
 func whereNested(linker string) WhereOperator {
 	return func(_ queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
 		wheres := value.([]queries.Where)
@@ -296,15 +317,17 @@ func whereNested(linker string) WhereOperator {
 }
 
 var whereOperators = map[string]WhereOperator{
-	"and": whereNested(" AND "),
-	"or":  whereNested(" OR "),
-	"not": whereNested(" NOT "),
-	"=":   whereComparators("="),
-	"!=":  whereComparators("!="),
-	">":   whereComparators(">"),
-	">=":  whereComparators(">="),
-	"<":   whereComparators("<"),
-	"<=":  whereComparators("<="),
+	"and":   whereNested(" AND "),
+	"or":    whereNested(" OR "),
+	"not":   whereNested(" NOT "),
+	"=":     whereComparators("="),
+	"!=":    whereComparators("!="),
+	">":     whereComparators(">"),
+	">=":    whereComparators(">="),
+	"<":     whereComparators("<"),
+	"<=":    whereComparators("<="),
+	"is":    whereVerbs("IS"),
+	"isNot": whereVerbs(" IS NOT "),
 	"in": func(key queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
 		opValues := value.([]interface{})
 
