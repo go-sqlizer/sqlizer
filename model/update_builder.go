@@ -25,7 +25,13 @@ func UpdateBuilder(data reflect.Value, result *reflect.Type, model Model, option
 			IsPrimaryKey: field.PrimaryKey,
 		}
 
-		if dataValue.IsValid() {
+		if dataValue.Kind() == reflect.Ptr && dataValue.IsNil() && field.DefaultValue != nil {
+			if v := reflect.ValueOf(field.DefaultValue); v.Kind() == reflect.Func {
+				column.Value = v.Call([]reflect.Value{})[0].Interface()
+			} else {
+				column.Value = field.DefaultValue
+			}
+		} else if dataValue.IsValid() {
 			column.Value = dataValue.Interface()
 		}
 
