@@ -247,6 +247,27 @@ func generateJoin(association Association, options queries.Include, tableAlias s
 				),
 			},
 		}
+	case HasOneAssociation:
+		return []queries.Join{
+			{
+				Type: options.JoinType,
+				From: parenAlias,
+				To: queries.TableSource{
+					Schema: model.Schema,
+					Table:  model.Table,
+					Alias:  tableAlias,
+				},
+				Where: append(
+					[]queries.Where{
+						queries.Eq(
+							primaryKey,
+							queries.ColumnValue{Alias: tableAlias, Field: model.FieldFromName(association.Properties.ForeignKey).Field},
+						),
+					},
+					options.Where...,
+				),
+			},
+		}
 	case ManyToManyAssociation:
 		assoc := association.Properties.Through.AssociationFromModel(*association.Model)
 		through := association.Properties.Through
