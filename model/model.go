@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/go-sqlizer/sqlizer/drivers"
+	"github.com/go-sqlizer/sqlizer/queries"
 	"github.com/go-sqlizer/sqlizer/types"
 	"reflect"
 )
@@ -47,4 +48,11 @@ func (model *Model) Init(driver drivers.Driver) *Model {
 func (model Model) FieldFromName(name string) Field {
 	columnsType := reflect.ValueOf(model.Columns)
 	return columnsType.FieldByName(name).Interface().(Field)
+}
+
+func (model Model) GetTableName() string {
+	return model.driver.SerializeTableSource(queries.TableSource{
+		Schema: model.Schema,
+		Table:  model.Table,
+	})
 }

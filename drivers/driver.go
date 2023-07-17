@@ -18,6 +18,7 @@ type Driver interface {
 	UpdateReturning(insert queries.BasicQuery) *sql.Row
 	Delete(delete queries.BasicQuery) (sql.Result, error)
 	Transaction(func(Transaction) error) error
+	SerializeTableSource(table queries.TableSource) string
 	Close()
 }
 
