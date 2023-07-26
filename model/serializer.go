@@ -209,6 +209,12 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 	result = common.ValueFinder(result)
 
 	if result.Kind() == reflect.Slice {
+		// Don't render row when primaryKey is null
+		if rowNil(columns, row) {
+			result.Set(reflect.MakeSlice(result.Type(), 0, 0))
+			return
+		}
+
 		valueHash := rowHash(prefix, columns, row)
 		resultInstanceAux, ok := (*resultHashTable)[valueHash]
 		nilCounter, length = 0, 0
@@ -233,6 +239,7 @@ func setValues(result *reflect.Value, row *map[string]interface{}, columns []que
 					Index:      result.Len() - 1,
 				}
 			}
+
 		}
 
 		return
@@ -277,4 +284,17 @@ func rowHash(prefix string, columns []queries.Column, row *map[string]interface{
 	}
 
 	return strHash
+}
+
+func rowNil(columns []queries.Column, row *map[string]interface{}) bool {
+	for _, column := range columns {
+		if column.Type != nil && column.IsPrimaryKey {
+			value := (*row)[column.Alias].(reflect.Value)
+			if value.IsNil() {
+				return true
+			}
+		}
+	}
+
+	return false
 }
