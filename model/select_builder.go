@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func SelectBuilder(result reflect.Type, model Model, options queries.QueryOptions) queries.BasicQuery {
+func SelectBuilder(result reflect.Type, model *Model, options queries.QueryOptions) queries.BasicQuery {
 	var columns []queries.Column
 	var joins []queries.Join
 	tableAlias := model.Name
@@ -23,9 +23,14 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 
 		if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 			field := c.Interface().(Field)
+
+			resultType := &resultField.Type
+			columnType := reflect.Type(field.Type)
+
 			columns = append(columns, queries.Column{
 				Alias:        resultField.Name,
-				Type:         &resultField.Type,
+				Type:         resultType,
+				ColumnType:   &columnType,
 				IsPrimaryKey: field.PrimaryKey,
 				Get:          field.Get,
 				Set:          field.Set,
@@ -63,6 +68,7 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 			Alias:        field.As,
 			Function:     field.Fn,
 			Type:         &fColumnType,
+			ColumnType:   &fColumnType,
 			IsPrimaryKey: isPk,
 			Source:       source,
 		})
@@ -102,7 +108,7 @@ func SelectBuilder(result reflect.Type, model Model, options queries.QueryOption
 	}
 }
 
-func generateAssociation(result *reflect.Type, association Association, options queries.Include, parent Model, parenAlias string) ([]queries.Column, []queries.Join) {
+func generateAssociation(result *reflect.Type, association Association, options queries.Include, parent *Model, parenAlias string) ([]queries.Column, []queries.Join) {
 	var columns []queries.Column
 	model := association.Model
 	tableAlias := fmt.Sprintf("%s.%s", parenAlias, options.As)
@@ -121,9 +127,12 @@ func generateAssociation(result *reflect.Type, association Association, options 
 
 			if c := reflect.ValueOf(model.Columns).FieldByName(resultField.Name); c.IsValid() {
 				field := c.Interface().(Field)
+				columnType := reflect.Type(field.Type)
+
 				columns = append(columns, queries.Column{
 					Alias:        resultField.Name,
 					Type:         &resultField.Type,
+					ColumnType:   &columnType,
 					IsPrimaryKey: field.PrimaryKey,
 					Get:          field.Get,
 					Set:          field.Set,
@@ -161,6 +170,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 				Alias:        field.As,
 				Function:     field.Fn,
 				Type:         &fColumnType,
+				ColumnType:   &fColumnType,
 				IsPrimaryKey: isPk,
 				Source:       source,
 			})
@@ -182,7 +192,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 				}
 			}
 
-			newColumns, newJoins := generateAssociation(associationType, childAssociation, include, *model, tableAlias)
+			newColumns, newJoins := generateAssociation(associationType, childAssociation, include, model, tableAlias)
 			joins = append(joins, newJoins...)
 			if associationType != nil {
 				columns = append(columns, queries.Column{
@@ -196,7 +206,7 @@ func generateAssociation(result *reflect.Type, association Association, options 
 	return columns, joins
 }
 
-func generateJoin(association Association, options queries.Include, tableAlias string, parent Model, parenAlias string) []queries.Join {
+func generateJoin(association Association, options queries.Include, tableAlias string, parent *Model, parenAlias string) []queries.Join {
 	model := association.Model
 
 	primaryKey := queries.ColumnValue{Alias: parenAlias, Field: parent.primaryKey.Field}

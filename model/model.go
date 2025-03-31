@@ -20,8 +20,8 @@ type Model struct {
 type Field struct {
 	Field        string
 	Type         types.FieldType
-	Get          func(model interface{}) interface{}
-	Set          func(model interface{}, value interface{}) interface{}
+	Get          func(value interface{}) interface{}
+	Set          func(value interface{}) interface{}
 	AllowNull    bool
 	PrimaryKey   bool
 	DefaultValue interface{}
@@ -45,12 +45,12 @@ func (model *Model) Init(driver drivers.Driver) *Model {
 	return model
 }
 
-func (model Model) FieldFromName(name string) Field {
+func (model *Model) FieldFromName(name string) Field {
 	columnsType := reflect.ValueOf(model.Columns)
 	return columnsType.FieldByName(name).Interface().(Field)
 }
 
-func (model Model) GetTableName() string {
+func (model *Model) GetTableName() string {
 	return model.driver.SerializeTableSource(queries.TableSource{
 		Schema: model.Schema,
 		Table:  model.Table,

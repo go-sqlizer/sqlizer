@@ -84,11 +84,12 @@ type Column struct {
 	Alias        string
 	Nested       *[]Column
 	Type         *reflect.Type
+	ColumnType   *reflect.Type
 	Source       *ColumnSource
 	Function     *Function
 	IsPrimaryKey bool
-	Get          func(model interface{}) interface{}
-	Set          func(model interface{}, value interface{}) interface{}
+	Get          func(value interface{}) interface{}
+	Set          func(value interface{}) interface{}
 	Value        interface{}
 }
 

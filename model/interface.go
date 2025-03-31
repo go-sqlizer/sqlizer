@@ -7,7 +7,7 @@ import (
 	"reflect"
 )
 
-func (model Model) FindAll(result interface{}, options queries.QueryOptions) error {
+func (model *Model) FindAll(result interface{}, options queries.QueryOptions) error {
 	resultPointerListValue := reflect.ValueOf(result)
 	if resultPointerListValue.Kind() != reflect.Ptr {
 		return errors.New("result must start as a pointer")
@@ -22,7 +22,6 @@ func (model Model) FindAll(result interface{}, options queries.QueryOptions) err
 
 	query := SelectBuilder(resultType, model, options)
 	rows, err := model.driver.Select(query)
-
 	if err != nil {
 		return err
 	}
@@ -31,7 +30,7 @@ func (model Model) FindAll(result interface{}, options queries.QueryOptions) err
 	return SerializeResults(resultListValue, query, rows)
 }
 
-func (model Model) FindOne(result interface{}, options queries.QueryOptions) error {
+func (model *Model) FindOne(result interface{}, options queries.QueryOptions) error {
 	resultPointerValue := reflect.TypeOf(result)
 	if resultPointerValue.Kind() != reflect.Ptr {
 		return errors.New("result must start as a pointer")
@@ -62,7 +61,7 @@ func (model Model) FindOne(result interface{}, options queries.QueryOptions) err
 	return nil
 }
 
-func (model Model) FindByPk(pk interface{}, result interface{}, options queries.QueryOptions) error {
+func (model *Model) FindByPk(pk interface{}, result interface{}, options queries.QueryOptions) error {
 	resultPointerValue := reflect.TypeOf(result)
 	if resultPointerValue.Kind() != reflect.Ptr {
 		return errors.New("result must start as a pointer")
@@ -96,7 +95,7 @@ func (model Model) FindByPk(pk interface{}, result interface{}, options queries.
 	return nil
 }
 
-func (model Model) Count(options queries.QueryOptions) (*uint, error) {
+func (model *Model) Count(options queries.QueryOptions) (*uint, error) {
 	var count []struct{ Count uint }
 	options.Fields = queries.Fields{
 		Includes: []queries.Field{
@@ -120,7 +119,10 @@ func (model Model) Count(options queries.QueryOptions) (*uint, error) {
 	return &countLen, nil
 }
 
-func (model Model) Paginate(result interface{}, options queries.PaginateOptions) (*queries.PaginateResults, error) {
+func (model *Model) Paginate(result interface{}, options queries.PaginateOptions) (*queries.PaginateResults, error) {
+	order := options.Order
+
+	options.QueryOptions.Order = []queries.Order{}
 	total, err := model.Count(options.QueryOptions)
 	if err != nil {
 		return nil, err
@@ -128,10 +130,11 @@ func (model Model) Paginate(result interface{}, options queries.PaginateOptions)
 
 	pages := math.Ceil(float64(*total) / float64(options.PerPage))
 	limit := int(options.PerPage)
-	offset := int(options.PerPage * (options.Page - 1))
+	offset := int(options.PerPage * options.Page)
 
 	options.Limit = &limit
 	options.Offset = &offset
+	options.Order = order
 	if err = model.FindAll(result, options.QueryOptions); err != nil {
 		return nil, err
 	}
@@ -139,7 +142,7 @@ func (model Model) Paginate(result interface{}, options queries.PaginateOptions)
 	return &queries.PaginateResults{Total: *total, Pages: uint(pages), Page: options.Page, PerPage: options.PerPage}, nil
 }
 
-func (model Model) Insert(data interface{}, result interface{}, options queries.InsertOptions) error {
+func (model *Model) Insert(data interface{}, result interface{}, options queries.InsertOptions) error {
 	dataValue := reflect.ValueOf(data)
 	if dataValue.Kind() != reflect.Struct {
 		return errors.New("the input data must be a struct")
@@ -167,7 +170,7 @@ func (model Model) Insert(data interface{}, result interface{}, options queries.
 	return err
 }
 
-func (model Model) Update(data interface{}, result interface{}, options queries.UpdateOptions) error {
+func (model *Model) Update(data interface{}, result interface{}, options queries.UpdateOptions) error {
 	dataValue := reflect.ValueOf(data)
 	if dataValue.Kind() != reflect.Struct {
 		return errors.New("the input data must be a struct")
@@ -195,7 +198,7 @@ func (model Model) Update(data interface{}, result interface{}, options queries.
 	return err
 }
 
-func (model Model) UpdateByPk(pk interface{}, data interface{}, result interface{}, options queries.UpdateOptions) error {
+func (model *Model) UpdateByPk(pk interface{}, data interface{}, result interface{}, options queries.UpdateOptions) error {
 	options.Where = []queries.Where{
 		queries.Eq(queries.ColumnValue{Field: model.primaryKey.Field}, pk),
 		queries.And(options.Where...),
@@ -204,7 +207,7 @@ func (model Model) UpdateByPk(pk interface{}, data interface{}, result interface
 	return model.Update(data, result, options)
 }
 
-func (model Model) Delete(options queries.DeleteOptions) error {
+func (model *Model) Delete(options queries.DeleteOptions) error {
 	_, err := model.driver.Delete(queries.BasicQuery{
 		From: queries.TableSource{
 			Schema: model.Schema,
@@ -219,7 +222,7 @@ func (model Model) Delete(options queries.DeleteOptions) error {
 	return err
 }
 
-func (model Model) DeleteByPk(pk interface{}, options queries.DeleteOptions) error {
+func (model *Model) DeleteByPk(pk interface{}, options queries.DeleteOptions) error {
 	options.Where = []queries.Where{
 		queries.Eq(queries.ColumnValue{Field: model.primaryKey.Field}, pk),
 		queries.And(options.Where...),

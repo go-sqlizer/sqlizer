@@ -6,6 +6,7 @@ import (
 	"github.com/go-sqlizer/sqlizer/common"
 	"github.com/go-sqlizer/sqlizer/queries"
 	"reflect"
+	"time"
 )
 
 type rowHashTable struct {
@@ -41,12 +42,12 @@ func SerializeResults(result reflect.Value, query queries.BasicQuery, row SqlRow
 	// Generate basic row result
 	resultType := resultListType.Elem()
 	for row.Next() {
-		scanArgs, argsStruct := generateValues(query.Columns)
+		scanArgs, resultArgs, argsStruct := generateValues(query.Columns)
 		if err = row.Scan(scanArgs...); err != nil {
 			return err
 		}
 
-		runColumnSetters(scanArgs, query.Columns)
+		runColumnSetters(scanArgs, resultArgs, query.Columns)
 		processNewValue(&query, &resultAux, &resultType, &argsStruct, &resultHashTable)
 	}
 
@@ -63,56 +64,87 @@ func SerializeResult(result reflect.Value, query queries.BasicQuery, row SqlRow)
 	}
 
 	// Generate basic row result
-	scanArgs, argsStruct := generateValues(query.Columns)
+	scanArgs, resultArgs, argsStruct := generateValues(query.Columns)
 	if err = row.Scan(scanArgs...); err != nil {
 		return err
 	}
 
-	runColumnSetters(scanArgs, query.Columns)
+	runColumnSetters(scanArgs, resultArgs, query.Columns)
 	setValues(&result, &argsStruct, query.Columns, nil, "")
 	return nil
 }
 
-func generateValues(columns []queries.Column) ([]interface{}, map[string]interface{}) {
+func generateValues(columns []queries.Column) ([]interface{}, []interface{}, map[string]interface{}) {
 	var scanArgs []interface{}
+	var resultArgs []interface{}
+
 	argsStruct := make(map[string]interface{})
 
 	for _, column := range columns {
 		if column.Nested == nil {
+			// Render columnArgs
+			columnType := *column.ColumnType
+			columnInstance := reflect.New(columnType)
+			if columnType.Kind() == reflect.Ptr {
+				scanArgs = append(scanArgs, columnInstance.Interface())
+			} else {
+				newTest := reflect.New(columnInstance.Type())
+				newTest.Elem().Set(columnInstance)
+				scanArgs = append(scanArgs, newTest.Interface())
+			}
+
+			// Render resultArgs
 			valueType := *column.Type
 			valueInstance := reflect.New(valueType)
 			if valueType.Kind() == reflect.Ptr {
 				argsStruct[column.Alias] = valueInstance
-				scanArgs = append(scanArgs, valueInstance.Interface())
+				resultArgs = append(resultArgs, valueInstance.Interface())
 			} else {
 				newTest := reflect.New(valueInstance.Type())
 				newTest.Elem().Set(valueInstance)
 				argsStruct[column.Alias] = newTest.Elem()
-				scanArgs = append(scanArgs, newTest.Interface())
+				resultArgs = append(resultArgs, newTest.Interface())
 			}
 		} else {
-			newScanArgs, newNestedValues := generateValues(*column.Nested)
+			newScanArgs, newResultArgs, newNestedValues := generateValues(*column.Nested)
 			scanArgs = append(scanArgs, newScanArgs...)
+			resultArgs = append(resultArgs, newResultArgs...)
 			argsStruct[column.Alias] = newNestedValues
 		}
 	}
 
-	return scanArgs, argsStruct
+	return scanArgs, resultArgs, argsStruct
 }
 
-func runColumnSetters(scanArgs []interface{}, columns []queries.Column) {
+func runColumnSetters(scanArgs []interface{}, resultArgs []interface{}, columns []queries.Column) {
 	for _, column := range columns {
 		if column.Nested == nil {
 			scanArg, scanArgsTmp := scanArgs[0], scanArgs[1:]
+			resultArg, resultArgsTmp := resultArgs[0], resultArgs[1:]
 			scanArgs = scanArgsTmp
+			resultArgs = resultArgsTmp
 
 			if column.Get != nil {
 				value := reflect.ValueOf(scanArg)
 				actualElem := value.Elem()
-				actualElem.Set(reflect.ValueOf(column.Get(actualElem.Interface())))
+
+				result := reflect.ValueOf(resultArg)
+				actualResult := result.Elem()
+
+				getResult := column.Get(actualElem.Interface())
+				if getResult != nil {
+					getResultValue := reflect.ValueOf(getResult)
+					actualResult.Set(getResultValue)
+				}
+			} else {
+				value := reflect.ValueOf(scanArg).Elem()
+				result := reflect.ValueOf(resultArg).Elem()
+
+				result.Set(value)
 			}
+
 		} else {
-			runColumnSetters(scanArgs, *column.Nested)
+			runColumnSetters(scanArgs, resultArgs, *column.Nested)
 		}
 	}
 }
@@ -128,9 +160,9 @@ func renderValue(resultType reflect.Type) reflect.Value {
 	case reflect.Array, reflect.Slice:
 		elem := reflect.MakeSlice(resultType, 0, 0).Elem()
 		return renderValueSlice(elem)
+	default:
+		panic("Invalid return type " + resultType.Name())
 	}
-
-	panic("Invalid return type " + resultType.Name())
 }
 
 func renderValueStruct(elem reflect.Value) reflect.Value {
@@ -144,6 +176,8 @@ func renderValueStruct(elem reflect.Value) reflect.Value {
 			newValue := renderValuePtr(elemField)
 			elemField.Set(newValue)
 		case reflect.Array, reflect.Slice:
+		default:
+			continue
 		}
 	}
 
@@ -151,6 +185,11 @@ func renderValueStruct(elem reflect.Value) reflect.Value {
 }
 
 func renderValuePtr(elem reflect.Value) reflect.Value {
+	// @TODO Be able to handle internal types better
+	if elem.Type() == reflect.TypeOf((*time.Time)(nil)) {
+		return elem
+	}
+
 	var newElem reflect.Value
 	if elem.IsZero() || elem.IsNil() {
 		newElem = reflect.New(elem.Type().Elem())
@@ -167,9 +206,9 @@ func renderValuePtr(elem reflect.Value) reflect.Value {
 		return newElem
 	case reflect.Array, reflect.Slice:
 		return renderValueSlice(newElem)
+	default:
+		return newElem
 	}
-
-	return newElem
 }
 
 func renderValueSlice(elem reflect.Value) reflect.Value {

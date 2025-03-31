@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func UpdateBuilder(data reflect.Value, result *reflect.Type, model Model, options queries.UpdateOptions) queries.BasicQuery {
+func UpdateBuilder(data reflect.Value, result *reflect.Type, model *Model, options queries.UpdateOptions) queries.BasicQuery {
 	var columns []queries.Column
 
 	modelColumns := reflect.ValueOf(model.Columns)
@@ -14,11 +14,13 @@ func UpdateBuilder(data reflect.Value, result *reflect.Type, model Model, option
 		modelFieldValue := modelColumns.Field(i)
 		fieldName := modelColumnsType.Field(i).Name
 		field := modelFieldValue.Interface().(Field)
+		columnType := reflect.Type(field.Type)
 		fieldType := reflect.Type(field.Type)
 		dataValue := data.FieldByName(fieldName)
 
 		column := queries.Column{
-			Alias: fieldName,
+			Alias:      fieldName,
+			ColumnType: &columnType,
 			Source: &queries.ColumnSource{
 				Field: field.Field,
 			},

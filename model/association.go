@@ -26,14 +26,14 @@ type AssociationProperties struct {
 	Through    *Model
 }
 
-func (model Model) AssociationFromModel(asocModel Model) Association {
+func (model *Model) AssociationFromModel(assocModel Model) Association {
 	associationType := reflect.ValueOf(model.Associations)
 	for i := 0; i < associationType.NumField(); i++ {
 		resultAssociation := associationType.Field(i).Interface().(Association)
-		if *resultAssociation.Model == asocModel {
+		if resultAssociation.Model.Name == assocModel.Name {
 			return resultAssociation
 		}
 	}
 
-	panic("Invalid Model " + asocModel.Name)
+	panic("Invalid Model " + assocModel.Name)
 }
