@@ -7,6 +7,7 @@ import (
 
 type FieldType reflect.Type
 
+// @TODO Update serializer when more types are added
 var (
 	StringType             = FieldType(reflect.TypeOf((*string)(nil)).Elem())
 	StringPtrType          = FieldType(reflect.TypeOf((*string)(nil)))

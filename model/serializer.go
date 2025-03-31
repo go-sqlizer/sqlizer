@@ -166,6 +166,12 @@ func renderValue(resultType reflect.Type) reflect.Value {
 }
 
 func renderValueStruct(elem reflect.Value) reflect.Value {
+	// @TODO Be able to handle internal types better
+	switch elem.Type() {
+	case reflect.TypeOf((*time.Time)(nil)).Elem():
+		return elem
+	}
+
 	for i := 0; i < elem.NumField(); i++ {
 		elemField := elem.Field(i)
 
@@ -186,7 +192,9 @@ func renderValueStruct(elem reflect.Value) reflect.Value {
 
 func renderValuePtr(elem reflect.Value) reflect.Value {
 	// @TODO Be able to handle internal types better
-	if elem.Type() == reflect.TypeOf((*time.Time)(nil)) {
+	switch elem.Type() {
+	case reflect.TypeOf((*time.Time)(nil)):
+	case reflect.TypeOf((*time.Time)(nil)).Elem():
 		return elem
 	}
 
