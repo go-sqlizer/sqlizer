@@ -12,8 +12,7 @@ type Sqlite3 struct {
 }
 
 func (p *Sqlite3) Connect(config Config) error {
-	connString := p.connectionString(config)
-	db, err := sql.Open(config.Dialect, connString)
+	db, err := sql.Open(config.Dialect, config.Url)
 	if err != nil {
 		return err
 	}
@@ -117,11 +116,7 @@ func (p *Sqlite3) UpdateReturning(update queries.BasicQuery) *sql.Row {
 	}
 }
 
-func (_ Sqlite3) connectionString(config Config) string {
-	return config.Host
-}
-
-func (_ Sqlite3) SerializeColumnAlias(column queries.Column) string {
+func (_ *Sqlite3) SerializeColumnAlias(column queries.Column) string {
 	if column.Source.Alias == "" {
 		return fmt.Sprintf(`"%s" AS "%s"`, column.Source.Field, column.Alias)
 	}
@@ -129,11 +124,11 @@ func (_ Sqlite3) SerializeColumnAlias(column queries.Column) string {
 	return fmt.Sprintf(`"%s"."%s" AS "%s"`, column.Source.Alias, column.Source.Field, column.Alias)
 }
 
-func (_ Sqlite3) SerializeColumn(column queries.Column) string {
+func (_ *Sqlite3) SerializeColumn(column queries.Column) string {
 	return fmt.Sprintf(`"%s"`, column.Source.Field)
 }
 
-func (_ Sqlite3) SerializeTableSource(table queries.TableSource) string {
+func (_ *Sqlite3) SerializeTableSource(table queries.TableSource) string {
 	schema := table.Schema
 
 	if schema != "" {
@@ -147,7 +142,7 @@ func (_ Sqlite3) SerializeTableSource(table queries.TableSource) string {
 	return fmt.Sprintf(`%s"%s" AS "%s"`, schema, table.Table, table.Alias)
 }
 
-func (_ Sqlite3) SerializeColumnKey(key queries.ColumnValue) string {
+func (_ *Sqlite3) SerializeColumnKey(key queries.ColumnValue) string {
 	if key.Alias == "" {
 		return fmt.Sprintf(`"%s"`, key.Field)
 	}
@@ -155,6 +150,6 @@ func (_ Sqlite3) SerializeColumnKey(key queries.ColumnValue) string {
 	return fmt.Sprintf(`"%s"."%s"`, key.Alias, key.Field)
 }
 
-func (_ Sqlite3) SerializeAlias(raw string, alias string) string {
+func (_ *Sqlite3) SerializeAlias(raw string, alias string) string {
 	return fmt.Sprintf(`%s AS "%s"`, raw, alias)
 }

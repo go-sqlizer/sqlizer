@@ -12,8 +12,7 @@ type Postgres struct {
 }
 
 func (p *Postgres) Connect(config Config) error {
-	connString := p.connectionString(config)
-	db, err := sql.Open(config.Dialect, connString)
+	db, err := sql.Open(config.Dialect, config.Url)
 	if err != nil {
 		return err
 	}
@@ -117,14 +116,7 @@ func (p *Postgres) UpdateReturning(update queries.BasicQuery) *sql.Row {
 	}
 }
 
-func (_ Postgres) connectionString(config Config) string {
-	return fmt.Sprintf(
-		`host=%s port=%d user=%s password=%s dbname=%s sslmode=%s`,
-		config.Host, config.Port, config.User, config.Password, config.Name, config.SSl)
-
-}
-
-func (_ Postgres) SerializeColumnAlias(column queries.Column) string {
+func (_ *Postgres) SerializeColumnAlias(column queries.Column) string {
 	if column.Source.Alias == "" {
 		return fmt.Sprintf(`"%s" AS "%s"`, column.Source.Field, column.Alias)
 	}
@@ -132,24 +124,25 @@ func (_ Postgres) SerializeColumnAlias(column queries.Column) string {
 	return fmt.Sprintf(`"%s"."%s" AS "%s"`, column.Source.Alias, column.Source.Field, column.Alias)
 }
 
-func (_ Postgres) SerializeColumn(column queries.Column) string {
+func (_ *Postgres) SerializeColumn(column queries.Column) string {
 	return fmt.Sprintf(`"%s"`, column.Source.Field)
 }
 
-func (_ Postgres) SerializeTableSource(table queries.TableSource) string {
+func (_ *Postgres) SerializeTableSource(table queries.TableSource) string {
 	schema := table.Schema
-	if schema == "" {
-		schema = "public"
+
+	if schema != "" {
+		schema = fmt.Sprintf(`"%s".`, schema)
 	}
 
 	if table.Alias == "" {
-		return fmt.Sprintf(`"%s"."%s"`, schema, table.Table)
+		return fmt.Sprintf(`%s"%s"`, schema, table.Table)
 	}
 
-	return fmt.Sprintf(`"%s"."%s" AS "%s"`, schema, table.Table, table.Alias)
+	return fmt.Sprintf(`%s"%s" AS "%s"`, schema, table.Table, table.Alias)
 }
 
-func (_ Postgres) SerializeColumnKey(key queries.ColumnValue) string {
+func (_ *Postgres) SerializeColumnKey(key queries.ColumnValue) string {
 	if key.Alias == "" {
 		return fmt.Sprintf(`"%s"`, key.Field)
 	}
@@ -157,6 +150,6 @@ func (_ Postgres) SerializeColumnKey(key queries.ColumnValue) string {
 	return fmt.Sprintf(`"%s"."%s"`, key.Alias, key.Field)
 }
 
-func (_ Postgres) SerializeAlias(raw string, alias string) string {
+func (_ *Postgres) SerializeAlias(raw string, alias string) string {
 	return fmt.Sprintf(`%s AS "%s"`, raw, alias)
 }

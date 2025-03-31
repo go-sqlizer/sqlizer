@@ -278,6 +278,10 @@ func whereVerbs(operator string) WhereOperator {
 		var valueStr string
 		if value == nil {
 			valueStr = "null"
+		} else if value == true {
+			valueStr = "TRUE"
+		} else if value == false {
+			valueStr = "FALSE"
 		} else {
 			switch value.(type) {
 			case queries.ColumnValue:
@@ -327,6 +331,8 @@ var whereOperators = map[string]WhereOperator{
 	">=":    whereComparators(">="),
 	"<":     whereComparators("<"),
 	"<=":    whereComparators("<="),
+	"like":  whereComparators("LIKE"),
+	"ilike": whereComparators("ILIKE"),
 	"is":    whereVerbs("IS"),
 	"isNot": whereVerbs(" IS NOT "),
 	"in": func(key queries.SQLRender, value interface{}, driver *CommonDriver, seq ValueSequencer) (filter string, values []interface{}) {
