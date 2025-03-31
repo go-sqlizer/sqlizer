@@ -6,9 +6,9 @@ func TypeResolver(p reflect.Type) *reflect.Type {
 	switch p.Kind() {
 	case reflect.Ptr, reflect.Array, reflect.Slice:
 		return TypeResolver(p.Elem())
+	default:
+		return &p
 	}
-
-	return &p
 }
 
 func ValueFinder(result *reflect.Value) *reflect.Value {
