@@ -43,6 +43,10 @@ func InsertBuilder(data reflect.Value, result *reflect.Type, model *Model, optio
 			}
 		}
 
+		if field.Set != nil {
+			column.Value = field.Set(column.Value)
+		}
+
 		if result != nil {
 			resultField, ok := (*result).FieldByName(fieldName)
 			if ok {
