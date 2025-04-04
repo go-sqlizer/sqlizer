@@ -13,6 +13,7 @@ type Model struct {
 	Table        string
 	Columns      interface{}
 	Associations interface{}
+	Timestamps   *Timestamps
 	primaryKey   *Field
 	driver       drivers.Driver
 }
@@ -26,6 +27,16 @@ type Field struct {
 	PrimaryKey   bool
 	DefaultValue interface{}
 	VirtualField bool
+}
+
+type Timestamps struct {
+	CreatedAt *Timestamp
+	UpdatedAt *Timestamp
+}
+
+type Timestamp struct {
+	Field string
+	Value interface{}
 }
 
 func (model *Model) Init(driver drivers.Driver) *Model {

@@ -27,6 +27,10 @@ func UpdateBuilder(data reflect.Value, result *reflect.Type, model *Model, optio
 			IsPrimaryKey: field.PrimaryKey,
 		}
 
+		if model.Timestamps != nil && model.Timestamps.UpdatedAt != nil && model.Timestamps.UpdatedAt.Field == fieldName {
+			columns = append(columns, renderTimestamp(model.Timestamps.UpdatedAt, modelColumns))
+		}
+
 		if dataValue.Kind() == reflect.Ptr && dataValue.IsNil() && field.DefaultValue != nil {
 			if v := reflect.ValueOf(field.DefaultValue); v.Kind() == reflect.Func {
 				column.Value = v.Call([]reflect.Value{})[0].Interface()

@@ -20,11 +20,24 @@ func InsertBuilder(data reflect.Value, result *reflect.Type, model *Model, optio
 
 		column := queries.Column{
 			Alias:      fieldName,
+			Type:       &fieldType,
 			ColumnType: &columnType,
 			Source: &queries.ColumnSource{
 				Field: field.Field,
 			},
 			IsPrimaryKey: field.PrimaryKey,
+		}
+
+		if model.Timestamps != nil {
+			if model.Timestamps.CreatedAt != nil && model.Timestamps.CreatedAt.Field == fieldName {
+				columns = append(columns, renderTimestamp(model.Timestamps.CreatedAt, modelColumns))
+				continue
+			}
+
+			if model.Timestamps.UpdatedAt != nil && model.Timestamps.UpdatedAt.Field == fieldName {
+				columns = append(columns, renderTimestamp(model.Timestamps.UpdatedAt, modelColumns))
+				continue
+			}
 		}
 
 		if dataValue.Kind() == reflect.Ptr && dataValue.IsNil() && field.DefaultValue != nil {
@@ -54,7 +67,6 @@ func InsertBuilder(data reflect.Value, result *reflect.Type, model *Model, optio
 			}
 		}
 
-		column.Type = &fieldType
 		columns = append(columns, column)
 	}
 
@@ -68,5 +80,31 @@ func InsertBuilder(data reflect.Value, result *reflect.Type, model *Model, optio
 			Schema: model.Schema,
 			Table:  model.Table,
 		},
+	}
+}
+
+func renderTimestamp(timestamp *Timestamp, modelColumns reflect.Value) queries.Column {
+	createdAtValue := modelColumns.FieldByName(timestamp.Field)
+	createdAt := createdAtValue.Interface().(Field)
+	var value interface{}
+
+	if timestamp.Value != nil {
+		if v := reflect.ValueOf(timestamp.Value); v.Kind() == reflect.Func {
+			value = v.Call([]reflect.Value{})[0].Interface()
+		} else {
+			value = timestamp.Value
+		}
+	}
+
+	createdAtType := reflect.Type(createdAt.Type)
+	return queries.Column{
+		Alias:      timestamp.Field,
+		ColumnType: &createdAtType,
+		Type:       &createdAtType,
+		Source: &queries.ColumnSource{
+			Field: createdAt.Field,
+		},
+		IsPrimaryKey: createdAt.PrimaryKey,
+		Value:        value,
 	}
 }
