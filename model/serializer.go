@@ -116,7 +116,7 @@ func generateValues(columns []queries.Column) ([]interface{}, []interface{}, map
 	return scanArgs, resultArgs, argsStruct
 }
 
-func runColumnSetters(scanArgs []interface{}, resultArgs []interface{}, columns []queries.Column) {
+func runColumnSetters(scanArgs []interface{}, resultArgs []interface{}, columns []queries.Column) ([]interface{}, []interface{}) {
 	for _, column := range columns {
 		if column.Nested == nil {
 			scanArg, scanArgsTmp := scanArgs[0], scanArgs[1:]
@@ -144,9 +144,11 @@ func runColumnSetters(scanArgs []interface{}, resultArgs []interface{}, columns 
 			}
 
 		} else {
-			runColumnSetters(scanArgs, resultArgs, *column.Nested)
+			scanArgs, resultArgs = runColumnSetters(scanArgs, resultArgs, *column.Nested)
 		}
 	}
+
+	return scanArgs, resultArgs
 }
 
 func renderValue(resultType reflect.Type) reflect.Value {
